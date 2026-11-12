@@ -99,8 +99,14 @@ function summarise(file: ISOFile, info: Movie, track: Track, samples: EncodedSam
 /**
  * Read the container and return the video track's samples (compressed data
  * included). Reads the file in 4 MB slices.
+ *
+ * Unedited iPhone screen recordings put the index (moov) after the frame
+ * data (mdat). mp4box drops data it has already parsed past, so reading
+ * straight through loses every frame before the index arrives. Instead we
+ * read wherever mp4box asks next: it skips over the frame data to the
+ * index, then asks for the frame data once it knows what to extract.
  */
-export async function demux(blob: Blob): Promise<{ info: ContainerInfo; samples: EncodedSample[] }> {
+export async function demux(blob: Blob, chunkSize = CHUNK): Promise<{ info: ContainerInfo; samples: EncodedSample[] }> {
   const file = createFile();
   let track: Track | undefined;
   let movie: Movie | undefined;
@@ -135,10 +141,17 @@ export async function demux(blob: Blob): Promise<{ info: ContainerInfo; samples:
   };
 
   let pos = 0;
+  let reads = 0;
+  const seen = new Set<number>();
   while (pos < blob.size && !failure) {
-    const ab = await blob.slice(pos, pos + CHUNK).arrayBuffer();
-    file.appendBuffer(MP4BoxBuffer.fromArrayBuffer(ab, pos));
-    pos += ab.byteLength;
+    // Guard against a loop if mp4box keeps asking for the same place.
+    if (seen.has(pos) || ++reads > 100_000) break;
+    seen.add(pos);
+    const ab = await blob.slice(pos, pos + chunkSize).arrayBuffer();
+    const next = file.appendBuffer(MP4BoxBuffer.fromArrayBuffer(ab, pos));
+    const declared = track?.nb_samples ?? 0;
+    if (declared && samples.length >= declared) break;
+    pos = typeof next === 'number' && next !== pos ? next : pos + ab.byteLength;
   }
   file.flush();
   if (failure) throw failure;

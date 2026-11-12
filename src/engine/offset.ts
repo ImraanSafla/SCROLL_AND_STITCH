@@ -37,7 +37,7 @@ export interface PreparedFrame {
   factor: number;
   coarse: RowSignatures;
   fine: RowSignatures;
-  /** Vertical-gradient energy; lower means more motion blur. */
+  /** Gradient energy at full resolution; lower means blurrier. */
   sharpness: number;
 }
 
@@ -73,16 +73,27 @@ const FINE_BANDS = 24;
 const FINE_CAP = 24;
 const DEFAULTS = { minOverlapFrac: 0.05, trim: 0.2 };
 
-export function sharpnessOf(img: GrayImage): number {
+/**
+ * Sharpness: mean gradient energy (horizontal + vertical) over the middle
+ * 80% of the frame, sampled every `step` pixels. Measured at full
+ * resolution, because compression softness lives in the finest detail that
+ * downscaling would average away. Motion blur lowers the vertical part.
+ */
+export function sharpnessOf(img: GrayImage, step = 2): number {
   const { width, height, data } = img;
   const y0 = Math.floor(height * 0.1);
   const y1 = Math.floor(height * 0.9);
   let s = 0;
-  for (let y = y0; y < y1 - 1; y++) {
+  let n = 0;
+  for (let y = y0; y < y1 - 1; y += step) {
     const r = y * width;
-    for (let x = 0; x < width; x++) s += Math.abs(data[r + x] - data[r + width + x]);
+    for (let x = 0; x < width - 1; x += step) {
+      const p = r + x;
+      s += Math.abs(data[p] - data[p + width]) + Math.abs(data[p] - data[p + 1]);
+      n++;
+    }
   }
-  return s / Math.max(1, (y1 - y0 - 1) * width);
+  return n ? s / n : 0;
 }
 
 export function prepareFrame(img: GrayFrame, factor = COARSE_FACTOR): PreparedFrame {
@@ -94,7 +105,7 @@ export function prepareFrame(img: GrayFrame, factor = COARSE_FACTOR): PreparedFr
     factor,
     coarse: rowSignatures(small, COARSE_BANDS),
     fine: rowSignatures(img, FINE_BANDS),
-    sharpness: sharpnessOf(small),
+    sharpness: sharpnessOf(img),
   };
 }
 

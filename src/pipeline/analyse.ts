@@ -189,8 +189,23 @@ export async function analyse(source: FrameSource, options: AnalyseOptions = {},
     }
     lap('match', t);
   } else {
-    // 3. Pauses → anchors.
+    // 3. Pauses → anchors. Within each pause, read a few frames and keep the
+    // sharpest: video encoders keep refining a still screen, so frames later
+    // in a pause tend to be crisper than the first ones.
     pauses = findPauses(times, timeline, { minDuration: opts.minPause, threshold });
+    t = performance.now();
+    const candidateTimes = pauses.map((p) => {
+      const len = p.end - p.start;
+      return [...new Set([p.anchor, p.start + len * 0.7, Math.max(p.start, p.end - 1 / 30)])];
+    });
+    const candidates = await prep(candidateTimes.flat());
+    let ci = 0;
+    pauses = pauses.map((p, i) => {
+      const group = candidates.slice(ci, (ci += candidateTimes[i].length));
+      const best = group.reduce((a, b) => (b.sharpness > a.sharpness ? b : a));
+      return { ...p, anchor: candidateTimes[i][group.indexOf(best)] };
+    });
+    lap('pickSharpest', t);
     const anchorTimes = pauses.map((p) => p.anchor);
     const movedBefore = (tt: number) => timeline.some((m) => m.time <= tt && m.motion > threshold);
     const movedAfter = (tt: number) => timeline.some((m) => m.time > tt && m.motion > threshold);
