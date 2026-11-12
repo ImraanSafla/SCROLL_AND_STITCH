@@ -5,36 +5,63 @@
  * accent, and no boxes nested inside boxes. Every state reads from the
  * tokens below.
  */
+/*
+ * Colour system: "Tropical Cosmic" (design/tropical-cosmic-palette.png).
+ * Island ocean meets night sky. Lagoon Blue leads; Nebula Violet and Night
+ * Indigo carry the cosmic side; Hibiscus, Coral, Palm and Sea Foam are
+ * small warm/island accents. Light mode sits on Warm Sand, dark mode on
+ * Night Indigo with a few faint stars.
+ */
 :root {
   color-scheme: light dark;
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
-  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  /* Rounded system face for headings, matching the board's rounded type.
+     Apple devices have SF Pro Rounded built in; others fall back. */
+  --font-display: ui-rounded, 'SF Pro Rounded', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, monospace;
 
-  --bg: #faf7f3;
-  --bg-2: #f3ede6;
-  --surface: #ffffff;
-  --fill: rgba(60, 40, 20, 0.06);
-  --fill-strong: rgba(60, 40, 20, 0.11);
-  --text: #1a1715;
-  --text-2: #6f6862;
-  --text-3: #a39b94;
-  --line: rgba(60, 40, 20, 0.12);
-  --accent: #e8542a;
-  --accent-hover: #d84a22;
-  --accent-press: #c2401c;
-  --accent-soft: rgba(232, 84, 42, 0.12);
-  --on-accent: #ffffff;
-  --warn: #b25e00;
-  --bad: #d70015;
-  --ok: #1f9d55;
-  --shade: rgba(20, 16, 12, 0.55);
+  /* Palette */
+  --lagoon: #2f6fdb;
+  --indigo: #1c1b4b;
+  --violet: #7b4fc9;
+  --hibiscus: #e8528c;
+  --coral: #ff8a5b;
+  --palm: #2e9e6b;
+  --foam: #bfe8f0;
+  --sand: #f6e7c8;
 
-  --r-xl: 28px;
-  --r-lg: 20px;
-  --r-md: 14px;
-  --r-sm: 10px;
-  --shadow: 0 1px 2px rgba(40, 25, 10, 0.05), 0 12px 32px rgba(40, 25, 10, 0.08);
+  /* Roles (light) */
+  --bg: #fbf3e6;
+  --bg-2: var(--sand);
+  --surface: #fffdf8;
+  --fill: rgba(28, 27, 75, 0.06);
+  --fill-strong: rgba(28, 27, 75, 0.11);
+  --text: var(--indigo);
+  --text-2: #4e4c7a;
+  --text-3: #6c6a94;
+  --line: rgba(28, 27, 75, 0.12);
+  --accent: var(--lagoon);
+  --accent-hover: #2862c7;
+  --accent-press: #2257b3;
+  /* Lagoon text on sand needs a touch more depth for 4.5:1. */
+  --accent-text: #2862c7;
+  --accent-soft: rgba(47, 111, 219, 0.12);
+  --on-accent: #ffffff;
+  --thread: var(--violet);
+  --tip: var(--violet);
+  --warn: #b5481b; /* deep coral, readable on sand */
+  --warn-mark: var(--coral);
+  --bad: #c2346c; /* deep hibiscus, readable on sand */
+  --bad-mark: var(--hibiscus);
+  --ok: var(--palm);
+  --shade: rgba(28, 27, 75, 0.55);
+  --zone-glow: rgba(191, 232, 240, 0.75);
+
+  --r-xl: 32px;
+  --r-lg: 22px;
+  --r-md: 16px;
+  --r-sm: 12px;
+  --shadow: 0 1px 2px rgba(28, 27, 75, 0.06), 0 12px 32px rgba(28, 27, 75, 0.08);
   --focus: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent);
   --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
   --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -45,24 +72,29 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0e0d0c;
-    --bg-2: #191613;
-    --surface: #1c1a18;
-    --fill: rgba(255, 240, 225, 0.07);
-    --fill-strong: rgba(255, 240, 225, 0.13);
-    --text: #f6f1ec;
-    --text-2: #aaa29b;
-    --text-3: #6f6862;
-    --line: rgba(255, 240, 225, 0.12);
-    --accent: #ff6a3d;
-    --accent-hover: #ff7a52;
-    --accent-press: #e85a2f;
-    --accent-soft: rgba(255, 106, 61, 0.16);
-    --on-accent: #1a0d07;
-    --warn: #ff9f0a;
-    --bad: #ff453a;
-    --ok: #32d74b;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --bg: #12113a;
+    --bg-2: var(--indigo);
+    --surface: #222160;
+    --fill: rgba(191, 232, 240, 0.07);
+    --fill-strong: rgba(191, 232, 240, 0.13);
+    --text: #fbf3e6;
+    --text-2: #bdb9d9;
+    --text-3: #8f8bb8;
+    --line: rgba(191, 232, 240, 0.12);
+    --accent: var(--lagoon);
+    --accent-hover: #3d7de8;
+    --accent-press: #2862c7;
+    --accent-text: #8db3f5;
+    --accent-soft: rgba(47, 111, 219, 0.24);
+    --on-accent: #ffffff;
+    --thread: #a07ce6;
+    --tip: #a07ce6;
+    --warn: var(--coral);
+    --bad: #f27aaa;
+    --ok: #4cc38a;
+    --shade: rgba(8, 7, 30, 0.6);
+    --zone-glow: rgba(123, 79, 201, 0.35);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 12px 32px rgba(0, 0, 0, 0.25);
   }
 }
 
@@ -74,6 +106,26 @@
 }
 html {
   -webkit-text-size-adjust: 100%;
+}
+/* A few small, faint stars: dark mode only. */
+@media (prefers-color-scheme: dark) {
+  body.app::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(2px 2px at 14% 12%, #ffd978, transparent 70%),
+      radial-gradient(1.5px 1.5px at 78% 8%, var(--foam), transparent 70%),
+      radial-gradient(1px 1px at 52% 22%, #ffffff, transparent 70%),
+      radial-gradient(2.5px 2.5px at 88% 31%, var(--foam), transparent 70%),
+      radial-gradient(1.5px 1.5px at 33% 46%, #ffd978, transparent 70%),
+      radial-gradient(1px 1px at 8% 64%, #ffffff, transparent 70%),
+      radial-gradient(2px 2px at 92% 72%, #ffd978, transparent 70%),
+      radial-gradient(1px 1px at 61% 88%, #ffffff, transparent 70%);
+    opacity: 0.7;
+  }
 }
 body.app {
   margin: 0;
@@ -146,7 +198,7 @@ body.app {
 }
 .btn.quiet {
   background: transparent;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .btn.big {
   width: 100%;
@@ -266,7 +318,7 @@ body.app {
 .chip[aria-pressed='true'] {
   border-color: var(--accent);
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .chip:disabled {
   opacity: 0.4;
@@ -307,7 +359,7 @@ body.app {
   border-radius: var(--r-xl);
   border: 2px dashed color-mix(in srgb, var(--accent) 45%, transparent);
   background:
-    radial-gradient(90% 80% at 50% 0%, var(--accent-soft), transparent 70%),
+    radial-gradient(90% 80% at 50% 0%, var(--zone-glow), transparent 70%),
     var(--surface);
   box-shadow: var(--shadow);
   text-align: center;
@@ -326,17 +378,18 @@ body.app {
   margin-bottom: 10px;
   transition: transform var(--t) var(--spring);
 }
+/* Three strips being stitched: lagoon, violet, hibiscus. */
 .dz-mark i {
   display: block;
   height: 12px;
-  border-radius: 4px;
-  background: var(--accent);
+  border-radius: 6px;
+  background: var(--lagoon);
 }
 .dz-mark i:nth-child(2) {
-  opacity: 0.6;
+  background: var(--violet);
 }
 .dz-mark i:nth-child(3) {
-  opacity: 0.3;
+  background: var(--hibiscus);
 }
 .dz-title {
   font: 700 24px/1.15 var(--font-display);
@@ -408,7 +461,7 @@ body.app {
 .drop-overlay p {
   font: 800 34px/1 var(--font-display);
   letter-spacing: -0.02em;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .drop-overlay.show {
   opacity: 1;
@@ -433,8 +486,8 @@ body.app {
 }
 .tips li::before {
   content: counter(tip);
-  font: 700 16px/1.45 var(--font-display);
-  color: var(--accent);
+  font: 800 17px/1.4 var(--font-display);
+  color: var(--tip);
 }
 .tips strong {
   color: var(--text);
@@ -483,7 +536,7 @@ body.app {
   height: 100%;
   width: 0;
   border-radius: 3px;
-  background: var(--accent);
+  background: linear-gradient(90deg, var(--lagoon), var(--thread));
   transition: width 250ms var(--ease);
 }
 .steps {
@@ -505,7 +558,7 @@ body.app {
 }
 .steps li.done::before {
   content: '✓ ';
-  color: var(--accent);
+  color: var(--ok);
 }
 .note {
   margin: 0 0 20px;
@@ -523,6 +576,8 @@ body.app {
   margin: 0 0 10px;
 }
 .error-body {
+  white-space: pre-line;
+  word-break: break-word;
   color: var(--text-2);
   margin: 0 0 22px;
 }
@@ -686,10 +741,10 @@ body.app {
   border-top: 2px dashed var(--ok);
 }
 .debug-layer .seam.low {
-  border-top-color: var(--warn);
+  border-top-color: var(--warn-mark);
 }
 .debug-layer .seam.gap {
-  border-top: 3px solid var(--bad);
+  border-top: 3px solid var(--bad-mark);
 }
 .debug-layer .seam span {
   position: absolute;

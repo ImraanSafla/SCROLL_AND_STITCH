@@ -82,6 +82,14 @@ export class WebCodecsSource implements FrameSource {
   private async decodeRanges(ranges: Array<[number, number]>, handle: (frame: VideoFrame) => Promise<void> | void) {
     const pending: Promise<void>[] = [];
     let error: Error | undefined;
+    let where = 'configure';
+    // Any decoder failure is a reader failure: the app then falls back to a
+    // different way of reading frames instead of giving up.
+    const fail = (e: unknown, stage: string) => {
+      if (error) return;
+      const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+      error = Object.assign(new Error(`Video decoder failed during ${stage} (${msg})`), { readerFailed: true });
+    };
     const decoder = new VideoDecoder({
       output: (frame) => {
         try {
@@ -89,19 +97,22 @@ export class WebCodecsSource implements FrameSource {
           if (r) pending.push(r);
         } catch (e) {
           frame.close();
-          error = e as Error;
+          fail(e, 'frame handling');
         }
       },
-      error: (e) => {
-        error = e instanceof Error ? e : new Error(String(e));
-      },
+      // The decoder reports its real problem here, then closes itself.
+      error: (e) => fail(e, where),
     });
-    decoder.configure({
-      codec: this.info.codec,
-      codedWidth: this.info.codedWidth,
-      codedHeight: this.info.codedHeight,
-      description: this.info.description,
-    });
+    try {
+      decoder.configure({
+        codec: this.info.codec,
+        codedWidth: this.info.codedWidth,
+        codedHeight: this.info.codedHeight,
+        description: this.info.description,
+      });
+    } catch (e) {
+      fail(e, 'configure');
+    }
     const waitForQueue = () =>
       new Promise<void>((resolve) => {
         const done = () => {
@@ -113,22 +124,39 @@ export class WebCodecsSource implements FrameSource {
       });
     for (const [start, end] of ranges) {
       for (let k = start; k <= end && !error; k++) {
-        while (decoder.decodeQueueSize > 6) await waitForQueue();
+        while (decoder.decodeQueueSize > 6 && !error) await waitForQueue();
+        // A failed decoder closes itself; let its own error explain why.
+        if (decoder.state !== 'configured') {
+          await new Promise((r) => setTimeout(r, 0));
+          fail(new Error(`decoder ${decoder.state}`), where);
+          break;
+        }
         const s = this.samples[k];
-        decoder.decode(
-          new EncodedVideoChunk({
-            type: s.isSync ? 'key' : 'delta',
-            timestamp: Math.round((s.cts / s.timescale) * 1e6),
-            duration: Math.round((s.duration / s.timescale) * 1e6),
-            data: s.data,
-          }),
-        );
+        where = `frame ${k} of ${this.samples.length}${s.isSync ? ' (keyframe)' : ''}`;
+        try {
+          decoder.decode(
+            new EncodedVideoChunk({
+              type: s.isSync ? 'key' : 'delta',
+              timestamp: Math.round((s.cts / s.timescale) * 1e6),
+              duration: Math.round((s.duration / s.timescale) * 1e6),
+              data: s.data,
+            }),
+          );
+        } catch (e) {
+          await new Promise((r) => setTimeout(r, 0));
+          fail(e, where);
+        }
       }
       if (error) break;
-      await decoder.flush();
+      try {
+        where = 'flush';
+        await decoder.flush();
+      } catch (e) {
+        fail(e, 'flush');
+      }
     }
     if (decoder.state !== 'closed') decoder.close();
-    await Promise.all(pending);
+    await Promise.allSettled(pending);
     if (error) throw error;
   }
 

@@ -68,8 +68,10 @@ class WorkerStitcher implements Stitcher {
 }
 
 class MainStitcher implements Stitcher {
-  readonly reader = 'seek' as const;
-  constructor(private session: Session) {}
+  constructor(
+    readonly reader: 'webcodecs' | 'seek',
+    private session: Session,
+  ) {}
   analyse(trim: { start: number; end: number } | undefined, onProgress: ProgressFn) {
     return this.session.analyse(trim, onProgress);
   }
@@ -81,53 +83,68 @@ class MainStitcher implements Stitcher {
   }
 }
 
-/** True when the worker path can plausibly work in this browser. */
-function workerPossible() {
-  return typeof Worker !== 'undefined' && typeof OffscreenCanvas !== 'undefined' && typeof VideoDecoder !== 'undefined';
-}
-
 /**
- * Open a video for stitching. `video` is a hidden element used only by the
- * fallback. `force` picks a reader (for debugging).
+ * Ways of reading a video, fastest first:
+ * - worker: WebCodecs in a background worker (never freezes the screen)
+ * - main: WebCodecs on the page itself, in case the browser's decoder
+ *   misbehaves inside workers
+ * - seek: the <video> element, slow but works everywhere
  */
-export async function openStitcher(file: File, video: HTMLVideoElement, force?: 'webcodecs' | 'seek'): Promise<{ stitcher: Stitcher; note?: string }> {
-  if (force !== 'seek' && workerPossible()) {
-    const worker = new Worker(new URL('../worker/stitch.worker.ts', import.meta.url), { type: 'module' });
-    const ws = new WorkerStitcher(worker);
+export type ReaderKind = 'worker' | 'main' | 'seek';
+const LABEL: Record<ReaderKind, string> = { worker: 'Background reader', main: 'Fast reader', seek: 'Video reader' };
+
+async function make(kind: ReaderKind, file: File, video: HTMLVideoElement): Promise<Stitcher> {
+  if (kind === 'worker') {
+    const ws = new WorkerStitcher(new Worker(new URL('../worker/stitch.worker.ts', import.meta.url), { type: 'module' }));
     try {
       await ws.call({ type: 'start', file });
-      return { stitcher: ws };
     } catch (e) {
       ws.dispose();
-      if (force === 'webcodecs') throw e;
-      const s = new MainStitcher(new Session(await SeekSource.create(video, file)));
-      return { stitcher: s, note: `Fast reader unavailable (${(e as Error).message}); using the slower reader.` };
+      throw e;
     }
+    return ws;
   }
-  return { stitcher: new MainStitcher(new Session(await SeekSource.create(video, file))) };
+  if (kind === 'main') {
+    // Loaded only when needed: it brings the MP4 reader with it.
+    const { WebCodecsSource } = await import('../video/webcodecs-source');
+    return new MainStitcher('webcodecs', new Session(await WebCodecsSource.create(file)));
+  }
+  return new MainStitcher('seek', new Session(await SeekSource.create(video, file)));
+}
+
+function ladder(force?: ReaderKind): ReaderKind[] {
+  if (force) return [force];
+  const webcodecs = typeof VideoDecoder !== 'undefined';
+  const worker = webcodecs && typeof Worker !== 'undefined' && typeof OffscreenCanvas !== 'undefined';
+  return [...(worker ? (['worker'] as const) : []), ...(webcodecs ? (['main'] as const) : []), 'seek'];
 }
 
 /**
- * Run an analysis, falling back to the main thread if the worker's reader
- * fails partway (e.g. no frames came back).
+ * Open and analyse a video, trying each reader in turn until one works.
+ * `notes` records what failed on the way, for debug mode and error reports.
  */
-export async function analyseWithFallback(
-  opened: { stitcher: Stitcher; note?: string },
+export async function openAndAnalyse(
   file: File,
   video: HTMLVideoElement,
   trim: { start: number; end: number } | undefined,
   onProgress: ProgressFn,
-): Promise<{ stitcher: Stitcher; summary: Summary; note?: string }> {
-  try {
-    return { stitcher: opened.stitcher, summary: await opened.stitcher.analyse(trim, onProgress), note: opened.note };
-  } catch (e) {
-    if (opened.stitcher.reader !== 'webcodecs' || !(e as { readerFailed?: boolean }).readerFailed) throw e;
-    opened.stitcher.dispose();
-    const s = new MainStitcher(new Session(await SeekSource.create(video, file)));
-    return {
-      stitcher: s,
-      summary: await s.analyse(trim, onProgress),
-      note: `Fast reader failed (${(e as Error).message}); used the slower reader.`,
-    };
+  force?: ReaderKind,
+): Promise<{ stitcher: Stitcher; summary: Summary; kind: ReaderKind; notes: string[] }> {
+  const notes: string[] = [];
+  const kinds = ladder(force);
+  for (let i = 0; i < kinds.length; i++) {
+    const kind = kinds[i];
+    let st: Stitcher | null = null;
+    try {
+      st = await make(kind, file, video);
+      const summary = await st.analyse(trim, onProgress);
+      return { stitcher: st, summary, kind, notes };
+    } catch (e) {
+      st?.dispose();
+      notes.push(`${LABEL[kind]} failed: ${(e as Error).message}`);
+      if (i === kinds.length - 1) throw Object.assign(new Error((e as Error).message), { notes });
+      onProgress('reading', 0);
+    }
   }
+  throw new Error('No way to read this video');
 }

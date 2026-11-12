@@ -9,11 +9,11 @@ import type { Stage, Summary } from '../pipeline/session';
 import { loadVideo, seekTo } from '../video/element';
 import { Preview } from './preview';
 import { DualRange } from './range';
-import { analyseWithFallback, openStitcher, type Stitcher } from './stitcher';
+import { openAndAnalyse, type ReaderKind, type Stitcher } from './stitcher';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const DEBUG = new URLSearchParams(location.search).has('debug');
-const FORCE_READER = new URLSearchParams(location.search).get('reader') as 'webcodecs' | 'seek' | null;
+const FORCE_READER = new URLSearchParams(location.search).get('reader') as ReaderKind | null;
 /** Recordings longer than this get a gentle memory warning. */
 const LONG_SECONDS = 20;
 
@@ -225,21 +225,23 @@ async function start(file: File, trim?: { start: number; end: number }) {
   }
 
   try {
-    const opened = sameFile
-      ? { stitcher: state.stitcher!, note: state.note }
-      : await openStitcher(file, els.hiddenVideo, FORCE_READER ?? undefined);
     const progress = (stage: Stage, f: number) => setStage(stage, f);
-    const res = await analyseWithFallback(opened, file, els.hiddenVideo, trim, progress);
-    state.stitcher = res.stitcher;
-    state.note = res.note;
-    state.summary = res.summary;
+    if (sameFile) {
+      state.summary = await state.stitcher!.analyse(trim, progress);
+    } else {
+      const res = await openAndAnalyse(file, els.hiddenVideo, trim, progress, FORCE_READER ?? undefined);
+      state.stitcher = res.stitcher;
+      state.note = `${res.kind}${res.notes.length ? ` (after: ${res.notes.join('; ')})` : ''}`;
+      state.summary = res.summary;
+    }
     preview.cropTop = preview.cropBottom = 0;
     await renderPreview(true);
     setStage('done');
     showResult();
   } catch (e) {
     console.error(e);
-    showError(friendly(e as Error));
+    const notes = (e as { notes?: string[] }).notes;
+    showError(friendly(e as Error) + (notes?.length ? `\n\nDetails: ${notes.join(' · ')}` : ''));
   } finally {
     state.busy = false;
   }
@@ -403,7 +405,7 @@ function updateRangeText() {
 function updateDebug() {
   const s = state.summary!;
   const lines = [
-    `reader: ${s.reader}${state.note ? ` (${state.note})` : ''}`,
+    `reader: ${state.note ?? s.reader}`,
     `frame: ${s.width}×${s.frameHeight}, header ${s.header}, footer ${s.footer}`,
     `used: ${s.trim.start.toFixed(2)}–${s.trim.end.toFixed(2)} s (detected ${s.trim.detectedStart.toFixed(2)}–${s.trim.detectedEnd.toFixed(2)}) of ${s.duration.toFixed(2)} s`,
     `pauses: ${s.pauses}, seams: ${s.seams.length}, gaps: ${s.gaps.length}`,
