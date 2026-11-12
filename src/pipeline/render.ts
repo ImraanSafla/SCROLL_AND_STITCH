@@ -8,6 +8,9 @@
  * we are never limited by the canvas size.
  * JPEG: browsers can only make JPEGs from a canvas, so very tall results
  * are split into parts no taller than JPEG_PART_MAX rows.
+ *
+ * Layout options, applied in this order: drop the fixed header and/or
+ * footer, then trim rows off the top and bottom of what remains.
  */
 import { findRecordingPill, paintOver, type Rect } from '../engine/pill';
 import type { Plan, Segment } from '../engine/compose';
@@ -22,6 +25,12 @@ export interface RenderOptions {
   quality?: number;
   /** Paint over the red recording indicator (default true). */
   hidePill?: boolean;
+  /** Include the fixed header / footer (default true). */
+  keepHeader?: boolean;
+  keepFooter?: boolean;
+  /** Rows to trim off the top / bottom, after header/footer choices. */
+  cropTop?: number;
+  cropBottom?: number;
   onProgress?: (fraction: number) => void;
 }
 
@@ -47,45 +56,73 @@ interface Placed {
   bmp: ImageBitmap;
 }
 
+/** Segments and height after the header/footer choices. */
+export function layoutOf(plan: Plan, keepHeader = true, keepFooter = true) {
+  const shift = keepHeader ? 0 : plan.header.rows;
+  const segments: Segment[] = [
+    ...(keepHeader ? [plan.header] : []),
+    ...plan.segments.map((s) => ({ ...s, dstY: s.dstY - shift })),
+    ...(keepFooter ? [{ ...plan.footer, dstY: plan.footer.dstY - shift }] : []),
+  ].filter((s) => s.rows > 0);
+  const height = plan.height - shift - (keepFooter ? 0 : plan.footer.rows);
+  return { segments, height };
+}
+
 export async function render(plan: Plan, source: FrameSource, options: RenderOptions = {}): Promise<RenderResult> {
   const format = options.format ?? 'png';
   const hidePill = options.hidePill ?? true;
+  const keepHeader = options.keepHeader ?? true;
   const t0 = performance.now();
   const W = plan.width;
-  const H = plan.height;
+  const lay = layoutOf(plan, keepHeader, options.keepFooter ?? true);
+  const cropTop = Math.max(0, Math.min(lay.height - 1, Math.round(options.cropTop ?? 0)));
+  const cropBottom = Math.max(0, Math.min(lay.height - cropTop - 1, Math.round(options.cropBottom ?? 0)));
+  const H = lay.height - cropTop - cropBottom;
 
-  // 1. Cut every strip we need, decoding each frame once.
-  const segs = [plan.header, ...plan.segments, plan.footer].filter((s) => s.rows > 0);
-  const bitmaps = await source.grabStrips(segs.map((s) => ({ time: s.time, y: s.srcY, rows: s.rows })));
-  const placed: Placed[] = segs.map((seg, i) => ({ seg, bmp: bitmaps[i] }));
+  // 1. Cut every strip we need, decoding each frame once. Strips entirely
+  // inside the trimmed-off area are skipped.
+  const needed = lay.segments.filter((s) => s.dstY + s.rows > cropTop && s.dstY < cropTop + H);
+  const bitmaps = await source.grabStrips(needed.map((s) => ({ time: s.time, y: s.srcY, rows: s.rows })));
+  const placed: Placed[] = needed.map((seg, i) => ({ seg, bmp: bitmaps[i] }));
   const tStrips = performance.now();
 
-  // The recording indicator lives in the status bar: the top ~6.5% of a frame
-  // (54 pt on a 852 pt tall iPhone screen).
-  // Not limited to the detected header: on recent iOS, Safari's bars are
-  // see-through, so there may be no fixed header at all.
-  const statusRows = Math.min(plan.height, Math.round(plan.frameHeight * 0.065));
+  // 2. The recording indicator lives in the status bar: the top ~6.5% of a
+  // frame (54 pt on an 852 pt tall iPhone screen). Not limited to the
+  // detected header: on recent iOS Safari's bars are see-through, so there
+  // may be no fixed header at all. Only relevant if the original top of
+  // the screen is still at the top of the layout.
+  const statusRows = Math.min(lay.height, Math.round(plan.frameHeight * 0.065));
+  const topIsScreenTop = keepHeader || plan.header.rows === 0;
   let pill: Rect | null = null;
 
-  const drawRows = (ctx: OffscreenCanvasRenderingContext2D, y0: number, rows: number) => {
+  const drawRaw = (ctx: OffscreenCanvasRenderingContext2D, ly0: number, rows: number) => {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, W, rows);
     for (const { seg, bmp } of placed) {
-      const a = Math.max(y0, seg.dstY);
-      const b = Math.min(y0 + rows, seg.dstY + seg.rows);
+      const a = Math.max(ly0, seg.dstY);
+      const b = Math.min(ly0 + rows, seg.dstY + seg.rows);
       if (a >= b) continue;
-      ctx.drawImage(bmp, 0, a - seg.dstY, W, b - a, 0, a - y0, W, b - a);
+      ctx.drawImage(bmp, 0, a - seg.dstY, W, b - a, 0, a - ly0, W, b - a);
     }
-    // Paint over the indicator if this band includes the status bar.
-    if (hidePill && y0 < statusRows) {
-      const n = Math.min(rows, statusRows - y0);
+  };
+
+  if (hidePill && topIsScreenTop && statusRows > 0) {
+    const c = new OffscreenCanvas(W, statusRows);
+    const ctx = c.getContext('2d', { willReadFrequently: true })!;
+    drawRaw(ctx, 0, statusRows);
+    pill = findRecordingPill(ctx.getImageData(0, 0, W, statusRows).data, W, statusRows);
+    c.width = c.height = 0;
+  }
+
+  /** Draw output rows [y0, y0 + rows) (output coords, after trimming). */
+  const drawRows = (ctx: OffscreenCanvasRenderingContext2D, y0: number, rows: number) => {
+    const ly0 = y0 + cropTop;
+    drawRaw(ctx, ly0, rows);
+    if (pill && ly0 < statusRows) {
+      const n = Math.min(rows, statusRows - ly0);
       const img = ctx.getImageData(0, 0, W, n);
-      const found = y0 === 0 ? findRecordingPill(img.data, W, n) : pill;
-      if (found) {
-        pill = found;
-        paintOver(img.data, W, n, found);
-        ctx.putImageData(img, 0, 0);
-      }
+      paintOver(img.data, W, n, { ...pill, y: pill.y - ly0 });
+      ctx.putImageData(img, 0, 0);
     }
   };
 
@@ -110,7 +147,6 @@ export async function render(plan: Plan, source: FrameSource, options: RenderOpt
         const rows = Math.min(JPEG_PART_MAX, H - y0);
         const canvas = new OffscreenCanvas(W, rows);
         const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-        // drawRows works in canvas-relative rows; draw the part in bands.
         for (let b = 0; b < rows; b += BAND) {
           const n = Math.min(BAND, rows - b);
           const band = new OffscreenCanvas(W, n);

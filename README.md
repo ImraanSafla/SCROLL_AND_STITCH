@@ -12,8 +12,8 @@ Turns an iPhone screen recording of someone scrolling into one long screenshot, 
 | --- | --- |
 | 1. Frame extraction lab (`/lab.html`) | Done, measured on iPhone |
 | 2. Offset estimation + test harness | Done |
-| 3. Compositing and output (`/harness.html`) | Done, awaiting iPhone results |
-| 4. Interface | |
+| 3. Compositing and output (`/harness.html`) | Done, tested on iPhone |
+| 4. Interface (the app at `/`) | Done, awaiting iPhone test |
 | 5. Animations | |
 | 6. PWA, offline, README | |
 
@@ -49,6 +49,12 @@ GH_TOKEN=<token with repo access> npm run deploy
 ```
 
 Then in the repo's Settings → Pages, set the source to the `gh-pages` branch (only needed once).
+
+## Using the app
+
+Open the site, tap **Choose a screen recording** (or drop a video anywhere on desktop), wait a few seconds, then **Save to Photos** (iPhone) or **Download image** (desktop). After stitching you can trim the top and bottom (drag the handles or use the steppers), remove the status bar in one tap, drop the fixed top/bottom bars, hide the red recording dot, choose PNG or JPEG, and change which part of the recording is used.
+
+Add `?debug` to the URL for seam markers, per-frame positions and stage timings. `?debug&sample=scroll-junk` loads a bundled test video. `?reader=seek` forces the slower video-seeking reader.
 
 ## How the analysis works
 
