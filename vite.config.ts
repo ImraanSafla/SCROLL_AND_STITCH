@@ -11,6 +11,7 @@ export default defineConfig(({ command }) => ({
       input: {
         main: resolve(import.meta.dirname, 'index.html'),
         lab: resolve(import.meta.dirname, 'lab.html'),
+        harness: resolve(import.meta.dirname, 'harness.html'),
       },
     },
   },

@@ -79,7 +79,10 @@ export function seekTo(el: HTMLVideoElement, t: number, frameWaitMs = 150): Prom
       finished = true;
       if (timer) clearTimeout(timer);
       if (!confirmed && rvfcHandle && hasRVFC()) el.cancelVideoFrameCallback(rvfcHandle);
-      resolve({ requested: t, mediaTime: frame, confirmed });
+      // Some browsers occasionally report the previous frame's time after a
+      // seek even though the new frame is shown. Distrust far-off values.
+      const trusted = frame !== undefined && Math.abs(frame - t) < 0.05 ? frame : undefined;
+      resolve({ requested: t, mediaTime: trusted ?? (confirmed ? el.currentTime : undefined), confirmed });
     };
     if (hasRVFC()) {
       rvfcHandle = el.requestVideoFrameCallback((_now, meta) => {

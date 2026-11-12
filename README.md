@@ -10,8 +10,8 @@ Turns an iPhone screen recording of someone scrolling into one long screenshot, 
 
 | Milestone | State |
 | --- | --- |
-| 1. Frame extraction lab (`/lab.html`) | Done, awaiting iPhone results |
-| 2. Offset estimation + test harness | Next |
+| 1. Frame extraction lab (`/lab.html`) | Done, measured on iPhone |
+| 2. Offset estimation + test harness (`/harness.html`) | Done, awaiting iPhone results |
 | 3. Compositing and output | |
 | 4. Interface | |
 | 5. Animations | |
@@ -49,6 +49,14 @@ GH_TOKEN=<token with repo access> npm run deploy
 
 Then in the repo's Settings → Pages, set the source to the `gh-pages` branch (only needed once).
 
+## How the analysis works
+
+See the header comment in [src/pipeline/analyse.ts](src/pipeline/analyse.ts). In short: skim tiny thumbnails at 8 fps, find pauses, read only the sharp frames from each pause at full resolution, match them coarse to fine, and read extra frames only where two anchors don't overlap confidently.
+
+Frames come from WebCodecs (mp4box.js demuxer + hardware decoder) where available, falling back to seeking a `<video>` element. On iPhone (Milestone 1), WebCodecs read full-resolution pixels in 12 ms against 131 ms via the video element.
+
 ## Known limitations
 
-To be filled in as milestones land.
+- Videos with a rotation flag use the slower seeking path for now.
+- Junk at the start and end of a recording (Control Centre, banners) is not trimmed yet (Milestone 3).
+- Safari's toolbar shrinking mid-recording is not handled yet: header and footer are detected once per video.

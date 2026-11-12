@@ -1,23 +1,27 @@
 /**
  * Canvas size limits.
  *
- * What is known (to be confirmed on a real iPhone with the Milestone 1 lab):
- * - iOS Safari limits each canvas to 16,777,216 pixels (4096 × 4096 worth of
- *   area). Larger canvases fail to allocate: getContext() may still return a
- *   context, but drawing silently does nothing. At 1179 px wide that is
- *   ~14,230 px tall; at 1320 px wide, ~12,710 px.
- * - Desktop Safari and Chrome allow much more (up to 32,767 px per side and
- *   ~268 million pixels in Chrome), but we design for the iPhone limit.
- * - iOS also has a total budget for all live canvases in a page (a few
- *   hundred MB). Canvases are only returned to that budget when they are
- *   resized to 0 × 0 or garbage collected, so we always zero them after use.
+ * Measured with the Milestone 1 lab on an iPhone running Safari 27.2
+ * (12 Nov 2026):
+ * - Maximum area per canvas: 67,108,864 pixels (2^26, i.e. 8192 × 8192).
+ *   At 1178 px wide the tallest working canvas was 56,964 px. Older iOS
+ *   versions capped this at 16,777,216 (4096 × 4096), so we keep probing
+ *   rather than trusting a constant.
+ * - Larger canvases fail silently: getContext() can still return a context
+ *   but drawing does nothing, so we test by reading a pixel back.
+ * - iOS also has a total budget for all live canvases in a page. Canvases
+ *   are only returned to that budget when resized to 0 × 0 or garbage
+ *   collected, so we always zero them after use.
  *
- * We probe rather than trust a hard-coded number, because WebKit has
- * changed these limits before.
+ * The stitched output never needs one giant canvas: the streaming PNG
+ * encoder (png-stream.ts) writes images of any height. A 1179 × 40,000 PNG
+ * encoded in 0.5 s on that iPhone and saved to Photos correctly.
  */
 
-/** Conservative default if probing is not possible. */
-export const IOS_CANVAS_MAX_AREA = 16_777_216;
+/** Per-canvas area limit measured on iOS Safari 27. */
+export const IOS_CANVAS_MAX_AREA = 67_108_864;
+/** Limit on older iOS versions; use this if probing is not possible. */
+export const IOS_LEGACY_CANVAS_MAX_AREA = 16_777_216;
 
 type AnyCanvas = HTMLCanvasElement | OffscreenCanvas;
 
