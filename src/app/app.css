@@ -5,63 +5,36 @@
  * accent, and no boxes nested inside boxes. Every state reads from the
  * tokens below.
  */
-/*
- * Colour system: "Tropical Cosmic" (design/tropical-cosmic-palette.png).
- * Island ocean meets night sky. Lagoon Blue leads; Nebula Violet and Night
- * Indigo carry the cosmic side; Hibiscus, Coral, Palm and Sea Foam are
- * small warm/island accents. Light mode sits on Warm Sand, dark mode on
- * Night Indigo with a few faint stars.
- */
 :root {
   color-scheme: light dark;
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
-  /* Rounded system face for headings, matching the board's rounded type.
-     Apple devices have SF Pro Rounded built in; others fall back. */
-  --font-display: ui-rounded, 'SF Pro Rounded', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, monospace;
 
-  /* Palette */
-  --lagoon: #2f6fdb;
-  --indigo: #1c1b4b;
-  --violet: #7b4fc9;
-  --hibiscus: #e8528c;
-  --coral: #ff8a5b;
-  --palm: #2e9e6b;
-  --foam: #bfe8f0;
-  --sand: #f6e7c8;
-
-  /* Roles (light) */
-  --bg: #fbf3e6;
-  --bg-2: var(--sand);
-  --surface: #fffdf8;
-  --fill: rgba(28, 27, 75, 0.06);
-  --fill-strong: rgba(28, 27, 75, 0.11);
-  --text: var(--indigo);
-  --text-2: #4e4c7a;
-  --text-3: #6c6a94;
-  --line: rgba(28, 27, 75, 0.12);
-  --accent: var(--lagoon);
-  --accent-hover: #2862c7;
-  --accent-press: #2257b3;
-  /* Lagoon text on sand needs a touch more depth for 4.5:1. */
-  --accent-text: #2862c7;
-  --accent-soft: rgba(47, 111, 219, 0.12);
+  --bg: #faf7f3;
+  --bg-2: #f3ede6;
+  --surface: #ffffff;
+  --fill: rgba(60, 40, 20, 0.06);
+  --fill-strong: rgba(60, 40, 20, 0.11);
+  --text: #1a1715;
+  --text-2: #6f6862;
+  --text-3: #7d756e;
+  --line: rgba(60, 40, 20, 0.12);
+  --accent: #e8542a;
+  --accent-hover: #d84a22;
+  --accent-press: #c2401c;
+  --accent-soft: rgba(232, 84, 42, 0.12);
   --on-accent: #ffffff;
-  --thread: var(--violet);
-  --tip: var(--violet);
-  --warn: #b5481b; /* deep coral, readable on sand */
-  --warn-mark: var(--coral);
-  --bad: #c2346c; /* deep hibiscus, readable on sand */
-  --bad-mark: var(--hibiscus);
-  --ok: var(--palm);
-  --shade: rgba(28, 27, 75, 0.55);
-  --zone-glow: rgba(191, 232, 240, 0.75);
+  --warn: #b25e00;
+  --bad: #d70015;
+  --ok: #1f9d55;
+  --shade: rgba(20, 16, 12, 0.55);
 
-  --r-xl: 32px;
-  --r-lg: 22px;
-  --r-md: 16px;
-  --r-sm: 12px;
-  --shadow: 0 1px 2px rgba(28, 27, 75, 0.06), 0 12px 32px rgba(28, 27, 75, 0.08);
+  --r-xl: 28px;
+  --r-lg: 20px;
+  --r-md: 14px;
+  --r-sm: 10px;
+  --shadow: 0 1px 2px rgba(40, 25, 10, 0.05), 0 12px 32px rgba(40, 25, 10, 0.08);
   --focus: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent);
   --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
   --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -72,29 +45,24 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #12113a;
-    --bg-2: var(--indigo);
-    --surface: #222160;
-    --fill: rgba(191, 232, 240, 0.07);
-    --fill-strong: rgba(191, 232, 240, 0.13);
-    --text: #fbf3e6;
-    --text-2: #bdb9d9;
-    --text-3: #8f8bb8;
-    --line: rgba(191, 232, 240, 0.12);
-    --accent: var(--lagoon);
-    --accent-hover: #3d7de8;
-    --accent-press: #2862c7;
-    --accent-text: #8db3f5;
-    --accent-soft: rgba(47, 111, 219, 0.24);
-    --on-accent: #ffffff;
-    --thread: #a07ce6;
-    --tip: #a07ce6;
-    --warn: var(--coral);
-    --bad: #f27aaa;
-    --ok: #4cc38a;
-    --shade: rgba(8, 7, 30, 0.6);
-    --zone-glow: rgba(123, 79, 201, 0.35);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 12px 32px rgba(0, 0, 0, 0.25);
+    --bg: #0e0d0c;
+    --bg-2: #191613;
+    --surface: #1c1a18;
+    --fill: rgba(255, 240, 225, 0.07);
+    --fill-strong: rgba(255, 240, 225, 0.13);
+    --text: #f6f1ec;
+    --text-2: #aaa29b;
+    --text-3: #8f8780;
+    --line: rgba(255, 240, 225, 0.12);
+    --accent: #ff6a3d;
+    --accent-hover: #ff7a52;
+    --accent-press: #e85a2f;
+    --accent-soft: rgba(255, 106, 61, 0.16);
+    --on-accent: #1a0d07;
+    --warn: #ff9f0a;
+    --bad: #ff453a;
+    --ok: #32d74b;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -106,26 +74,6 @@
 }
 html {
   -webkit-text-size-adjust: 100%;
-}
-/* A few small, faint stars: dark mode only. */
-@media (prefers-color-scheme: dark) {
-  body.app::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background:
-      radial-gradient(2px 2px at 14% 12%, #ffd978, transparent 70%),
-      radial-gradient(1.5px 1.5px at 78% 8%, var(--foam), transparent 70%),
-      radial-gradient(1px 1px at 52% 22%, #ffffff, transparent 70%),
-      radial-gradient(2.5px 2.5px at 88% 31%, var(--foam), transparent 70%),
-      radial-gradient(1.5px 1.5px at 33% 46%, #ffd978, transparent 70%),
-      radial-gradient(1px 1px at 8% 64%, #ffffff, transparent 70%),
-      radial-gradient(2px 2px at 92% 72%, #ffd978, transparent 70%),
-      radial-gradient(1px 1px at 61% 88%, #ffffff, transparent 70%);
-    opacity: 0.7;
-  }
 }
 body.app {
   margin: 0;
@@ -141,7 +89,7 @@ body.app {
 .shell {
   max-width: 640px;
   margin: 0 auto;
-  padding: max(28px, calc(env(safe-area-inset-top) + 12px)) var(--gutter) calc(140px + env(safe-area-inset-bottom));
+  padding: max(28px, calc(env(safe-area-inset-top) + 12px)) var(--gutter) calc(32px + env(safe-area-inset-bottom));
 }
 
 /* ---------- Masthead ---------- */
@@ -198,7 +146,14 @@ body.app {
 }
 .btn.quiet {
   background: transparent;
-  color: var(--accent-text);
+  color: var(--accent);
+}
+a.btn {
+  text-decoration: none;
+}
+a.btn.disabled {
+  opacity: 0.45;
+  pointer-events: none;
 }
 .btn.big {
   width: 100%;
@@ -318,7 +273,7 @@ body.app {
 .chip[aria-pressed='true'] {
   border-color: var(--accent);
   background: var(--accent-soft);
-  color: var(--accent-text);
+  color: var(--accent);
 }
 .chip:disabled {
   opacity: 0.4;
@@ -359,7 +314,7 @@ body.app {
   border-radius: var(--r-xl);
   border: 2px dashed color-mix(in srgb, var(--accent) 45%, transparent);
   background:
-    radial-gradient(90% 80% at 50% 0%, var(--zone-glow), transparent 70%),
+    radial-gradient(90% 80% at 50% 0%, var(--accent-soft), transparent 70%),
     var(--surface);
   box-shadow: var(--shadow);
   text-align: center;
@@ -378,18 +333,17 @@ body.app {
   margin-bottom: 10px;
   transition: transform var(--t) var(--spring);
 }
-/* Three strips being stitched: lagoon, violet, hibiscus. */
 .dz-mark i {
   display: block;
   height: 12px;
-  border-radius: 6px;
-  background: var(--lagoon);
+  border-radius: 4px;
+  background: var(--accent);
 }
 .dz-mark i:nth-child(2) {
-  background: var(--violet);
+  opacity: 0.6;
 }
 .dz-mark i:nth-child(3) {
-  background: var(--hibiscus);
+  opacity: 0.3;
 }
 .dz-title {
   font: 700 24px/1.15 var(--font-display);
@@ -461,7 +415,7 @@ body.app {
 .drop-overlay p {
   font: 800 34px/1 var(--font-display);
   letter-spacing: -0.02em;
-  color: var(--accent-text);
+  color: var(--accent);
 }
 .drop-overlay.show {
   opacity: 1;
@@ -486,8 +440,8 @@ body.app {
 }
 .tips li::before {
   content: counter(tip);
-  font: 800 17px/1.4 var(--font-display);
-  color: var(--tip);
+  font: 700 16px/1.45 var(--font-display);
+  color: var(--accent);
 }
 .tips strong {
   color: var(--text);
@@ -536,7 +490,7 @@ body.app {
   height: 100%;
   width: 0;
   border-radius: 3px;
-  background: linear-gradient(90deg, var(--lagoon), var(--thread));
+  background: var(--accent);
   transition: width 250ms var(--ease);
 }
 .steps {
@@ -558,7 +512,7 @@ body.app {
 }
 .steps li.done::before {
   content: '✓ ';
-  color: var(--ok);
+  color: var(--accent);
 }
 .note {
   margin: 0 0 20px;
@@ -607,7 +561,7 @@ body.app {
 .preview {
   position: relative;
   /* Fit between the compact masthead and the save bar. */
-  max-height: max(320px, calc(100dvh - 250px - env(safe-area-inset-bottom)));
+  max-height: max(320px, calc(100dvh - 170px - env(safe-area-inset-bottom)));
   overflow: auto;
   border-radius: var(--r-lg);
   background: var(--fill);
@@ -741,10 +695,10 @@ body.app {
   border-top: 2px dashed var(--ok);
 }
 .debug-layer .seam.low {
-  border-top-color: var(--warn-mark);
+  border-top-color: var(--warn);
 }
 .debug-layer .seam.gap {
-  border-top: 3px solid var(--bad-mark);
+  border-top: 3px solid var(--bad);
 }
 .debug-layer .seam span {
   position: absolute;
@@ -1009,6 +963,21 @@ body.app {
   display: flex;
   gap: 16px;
   margin-left: auto;
+}
+#saveBtn.saved {
+  background: var(--ok);
+  color: #fff;
+}
+
+/* ---------- Actions (end of the page) ---------- */
+.actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 28px;
+}
+.actions .hint {
+  margin: 4px 0 0;
+  text-align: center;
 }
 #saveBtn.saved {
   background: var(--ok);

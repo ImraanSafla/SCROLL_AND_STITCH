@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#fbf3e6" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#12113a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#faf7f3" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e0d0c" media="(prefers-color-scheme: dark)" />
     <meta name="description" content="Turn a screen recording into one long screenshot, entirely on your phone." />
     <title>Scroll &amp; Stitch</title>
   </head>
@@ -76,14 +76,9 @@
       <section class="view" id="viewResult" aria-label="Your long screenshot" hidden>
         <div class="result-head">
           <p class="result-size" id="resultSize"></p>
-          <div class="zoom" role="group" aria-label="Zoom">
-            <button class="icon-btn" type="button" id="zoomOut" aria-label="Zoom out">−</button>
-            <button class="icon-btn" type="button" id="zoomReset" aria-label="Fit to width">Fit</button>
-            <button class="icon-btn" type="button" id="zoomIn" aria-label="Zoom in">+</button>
-          </div>
         </div>
         <p class="note warn" id="gapNote" hidden></p>
-        <div class="preview" id="preview" tabindex="0" aria-label="Preview. Pinch or use the zoom buttons to zoom.">
+        <div class="preview" id="preview" tabindex="0" aria-label="Preview. Pinch or double-tap to zoom.">
           <div class="preview-inner" id="previewInner">
             <img id="previewImg" alt="Stitched screenshot preview" draggable="false" />
             <div class="crop-shade top" id="shadeTop"><button class="crop-handle" type="button" id="handleTop" aria-label="Trim from the top. Use arrow keys to adjust."></button></div>
@@ -123,20 +118,13 @@
             <span>Hide the red recording dot</span>
             <input type="checkbox" role="switch" id="hidePill" checked />
           </label>
-
-          <div class="adjust-row">
-            <span class="adjust-label">Format</span>
-            <div class="segmented" role="radiogroup" aria-label="Image format">
-              <label><input type="radio" name="format" value="png" checked /><span>PNG</span></label>
-              <label><input type="radio" name="format" value="jpeg" /><span>JPEG</span></label>
-            </div>
             <label class="quality" id="qualityRow" hidden>
               <span>Quality <output id="qualityOut">90%</output></span>
               <input type="range" id="quality" min="50" max="100" step="5" value="90" />
             </label>
           </div>
 
-          <div class="range-block">
+          <div class="range-block" id="rangeBlock" hidden>
             <div class="adjust-row">
               <span class="adjust-label">Recording used</span>
               <output id="rangeOut"></output>
@@ -148,6 +136,15 @@
             </div>
             <p class="hint" id="rangeHint">Detected automatically. Drag the ends if it guessed wrong.</p>
             <button class="btn quiet small" type="button" id="restitch" hidden>Stitch again with this range</button>
+          </div>
+
+          <div class="actions">
+            <button class="btn primary big" type="button" id="saveBtn">
+              <span class="label">Save to Photos</span>
+            </button>
+            <a class="btn big" id="downloadLink" href="#">Download PNG</a>
+            <button class="btn quiet big" type="button" id="newBtn">Make a new stitch</button>
+            <p class="hint" id="saveHint" role="status" hidden></p>
           </div>
 
           <details class="debug" id="debugPanel" hidden>
@@ -162,21 +159,6 @@
         <p>Your recording never leaves this device. Everything happens on your phone.</p>
       </footer>
     </main>
-
-    <div class="savebar" id="saveBar" hidden>
-      <div class="savebar-inner">
-        <button class="btn primary big" type="button" id="saveBtn">
-          <span class="label">Save to Photos</span>
-        </button>
-        <div class="savebar-sub">
-          <p class="hint" id="saveHint">Tap <strong>Save Image</strong> in the share sheet.</p>
-          <div class="savebar-links">
-            <a class="link" id="downloadLink" href="#">Download</a>
-            <button class="link" type="button" id="newBtn">New recording</button>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <video id="hiddenVideo" muted playsinline hidden></video>
     <script type="module" src="/src/app/main.ts"></script>

@@ -14,6 +14,8 @@ import { openAndAnalyse, type ReaderKind, type Stitcher } from './stitcher';
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const DEBUG = new URLSearchParams(location.search).has('debug');
 const FORCE_READER = new URLSearchParams(location.search).get('reader') as ReaderKind | null;
+/** Status bar height as a fraction of the frame (54 pt of 852 pt). */
+const STATUS_FRACTION = 0.065;
 /** Recordings longer than this get a gentle memory warning. */
 const LONG_SECONDS = 20;
 
@@ -46,14 +48,11 @@ const els = {
   keepHeader: $<HTMLInputElement>('keepHeader'),
   keepFooter: $<HTMLInputElement>('keepFooter'),
   hidePill: $<HTMLInputElement>('hidePill'),
-  qualityRow: $('qualityRow'),
-  quality: $<HTMLInputElement>('quality'),
-  qualityOut: $<HTMLOutputElement>('qualityOut'),
+  rangeBlock: $('rangeBlock'),
   rangeOut: $<HTMLOutputElement>('rangeOut'),
   restitch: $<HTMLButtonElement>('restitch'),
   debugPanel: $<HTMLDetailsElement>('debugPanel'),
   debugText: $('debugText'),
-  saveBar: $('saveBar'),
   saveBtn: $<HTMLButtonElement>('saveBtn'),
   saveHint: $('saveHint'),
   downloadLink: $<HTMLAnchorElement>('downloadLink'),
@@ -128,7 +127,6 @@ const store = {
 
 function show(view: keyof typeof els.views) {
   for (const [k, el] of Object.entries(els.views)) el.hidden = k !== view;
-  els.saveBar.hidden = view !== 'result';
   els.dropzone.setAttribute('aria-disabled', String(view === 'work'));
   document.body.classList.toggle('compact', view !== 'empty');
 }
@@ -234,7 +232,9 @@ async function start(file: File, trim?: { start: number; end: number }) {
       state.note = `${res.kind}${res.notes.length ? ` (after: ${res.notes.join('; ')})` : ''}`;
       state.summary = res.summary;
     }
-    preview.cropTop = preview.cropBottom = 0;
+    // The status bar is removed by default; the chip and handles undo it.
+    preview.cropTop = Math.round(state.summary.frameHeight * STATUS_FRACTION);
+    preview.cropBottom = 0;
     await renderPreview(true);
     setStage('done');
     showResult();
@@ -321,6 +321,7 @@ function setExport(r: RenderResult) {
   els.downloadLink.href = state.exportUrls[0];
   els.downloadLink.download = fileNames(ext, r.blobs.length)[0];
   els.downloadLink.textContent = r.blobs.length > 1 ? `Download ${r.blobs.length} parts` : `Download ${ext.toUpperCase()}`;
+  els.saveHint.hidden = true;
   setSaveBusy(false);
   updateResultText();
 }
@@ -328,7 +329,9 @@ function setExport(r: RenderResult) {
 function setSaveBusy(busy: boolean) {
   els.saveBtn.disabled = busy;
   els.saveBtn.setAttribute('aria-busy', String(busy));
-  els.saveBtn.querySelector('.label')!.textContent = busy ? 'Preparing' : canShareFiles ? 'Save to Photos' : 'Download image';
+  els.saveBtn.querySelector('.label')!.textContent = busy ? 'Preparing' : 'Save to Photos';
+  els.downloadLink.classList.toggle('disabled', busy);
+  els.downloadLink.setAttribute('aria-disabled', String(busy));
 }
 
 function resetSaved() {
@@ -348,14 +351,13 @@ function showResult() {
   els.hidePill.checked = state.opts.hidePill;
   range.set(s.trim.start, s.trim.end, s.duration);
   els.restitch.hidden = true;
+  els.rangeBlock.hidden = !DEBUG;
   updateRangeText();
   updateTrimText();
-  els.downloadLink.hidden = !canShareFiles; // on desktop the main button downloads
-  els.saveHint.textContent = canShareFiles
-    ? store.get('sas.saved')
-      ? 'Opens the share sheet.'
-      : 'Tap Save Image in the share sheet.'
-    : 'Saves the full-resolution image.';
+  // Where there is no share sheet (desktop), Download is the main action.
+  els.saveBtn.hidden = !canShareFiles;
+  els.downloadLink.classList.toggle('primary', !canShareFiles);
+  els.saveHint.hidden = true;
   if (s.gaps.length) {
     const missing = s.gaps.reduce((a, g) => a + g.missing, 0);
     els.gapNote.textContent = `Part of the page wasn't captured (about ${missing} px, marked in red). Scrolling a little slower avoids this.`;
@@ -392,7 +394,7 @@ function updateTrimText() {
   ] as const)
     $(id).classList.toggle('active', on);
   const s = state.summary;
-  const statusRows = s ? Math.round(s.frameHeight * 0.065) : 0;
+  const statusRows = s ? Math.round(s.frameHeight * STATUS_FRACTION) : 0;
   const statusShown = state.opts.keepHeader || !s?.header;
   els.trimStatus.disabled = !statusShown;
   els.trimStatus.setAttribute('aria-pressed', String(preview.cropTop === statusRows && statusRows > 0));
@@ -439,9 +441,12 @@ async function save() {
       store.set('sas.saved', '1');
       els.saveBtn.classList.add('saved');
       els.saveBtn.querySelector('.label')!.textContent = 'Done';
-      els.saveHint.textContent = 'If you tapped Save Image, it’s in Photos now.';
+      els.saveBtn.querySelector('.label')!.textContent = 'Saved';
     } catch (e) {
-      if ((e as Error).name !== 'AbortError') els.saveHint.textContent = `Couldn't open the share sheet (${(e as Error).message}). Use Download instead.`;
+      if ((e as Error).name !== 'AbortError') {
+        els.saveHint.textContent = `Couldn't open the share sheet (${(e as Error).message}). Use Download PNG instead.`;
+        els.saveHint.hidden = false;
+      }
     }
     return;
   }
@@ -548,10 +553,6 @@ els.errorRetry.addEventListener('click', () => {
 els.errorNew.addEventListener('click', reset);
 els.newBtn.addEventListener('click', reset);
 
-// Zoom buttons.
-$('zoomIn').addEventListener('click', () => preview.zoomBy(1.5));
-$('zoomOut').addEventListener('click', () => preview.zoomBy(1 / 1.5));
-$('zoomReset').addEventListener('click', () => preview.setZoom(1));
 
 // Trim.
 preview.onCrop = () => {
@@ -568,7 +569,7 @@ for (const b of document.querySelectorAll<HTMLButtonElement>('[data-trim]')) {
 els.trimStatus.addEventListener('click', () => {
   const s = state.summary;
   if (!s) return;
-  const rows = Math.round(s.frameHeight * 0.065);
+  const rows = Math.round(s.frameHeight * STATUS_FRACTION);
   preview.setCrop(preview.cropTop === rows ? 0 : rows, preview.cropBottom);
 });
 
@@ -586,20 +587,7 @@ for (const [input, key] of [
   });
 }
 
-// Format and quality only change the saved file.
-for (const r of document.querySelectorAll<HTMLInputElement>('input[name="format"]')) {
-  r.addEventListener('change', () => {
-    if (!r.checked) return;
-    state.opts.format = r.value as Options['format'];
-    els.qualityRow.hidden = state.opts.format !== 'jpeg';
-    scheduleExport(0);
-  });
-}
-els.quality.addEventListener('input', () => {
-  els.qualityOut.value = `${els.quality.value}%`;
-  state.opts.quality = Number(els.quality.value) / 100;
-  scheduleExport();
-});
+// Format is always full-quality PNG; JPEG support stays in the renderer.
 
 // Which part of the recording to use.
 range.onChange = () => {
