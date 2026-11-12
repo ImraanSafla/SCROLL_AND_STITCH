@@ -7,7 +7,8 @@
 import '../styles/base.css';
 import '../lab/lab.css';
 import './harness.css';
-import { analyse, type Analysis, type Mode } from '../pipeline/analyse';
+import { analyse, planFrom, type Analysis, type Mode } from '../pipeline/analyse';
+import { render, type Format } from '../pipeline/render';
 import { SeekSource } from '../video/seek-source';
 import type { FrameSource } from '../video/source';
 import { WebCodecsSource } from '../video/webcodecs-source';
@@ -19,6 +20,8 @@ const fileInput = $<HTMLInputElement>('file');
 const fileName = $<HTMLSpanElement>('fileName');
 const readerSel = $<HTMLSelectElement>('readerSel');
 const modeSel = $<HTMLSelectElement>('modeSel');
+const formatSel = $<HTMLSelectElement>('formatSel');
+const keepStatus = $<HTMLInputElement>('keepStatus');
 const video = $<HTMLVideoElement>('video');
 const runBtn = $<HTMLButtonElement>('run');
 const statusEl = $<HTMLParagraphElement>('status');
@@ -30,7 +33,13 @@ interface Truth {
   fps: number;
   headerHeight: number;
   footerHeight: number;
-  frames: { t: number; offset: number }[];
+  junkLead?: number;
+  junkTail?: number;
+  durationSec: number;
+  pill?: number[];
+  frames: { t: number; offset: number; junk?: number }[];
+  /** URL of the perfect stitched image. */
+  image: string;
 }
 
 const report: { harness: string; when: string; userAgent: string; runs: unknown[] } = {
@@ -60,7 +69,9 @@ async function loadInput(): Promise<{ file: File; truth: Truth | null; label: st
   const [v, j] = await Promise.all([fetch(`${base}.mp4`), fetch(`${base}.json`)]);
   if (!v.ok || !j.ok) throw new Error('Could not download the test video.');
   const file = new File([await v.blob()], `${videoSel.value}.mp4`, { type: 'video/mp4' });
-  return { file, truth: (await j.json()) as Truth, label: videoSel.options[videoSel.selectedIndex].text };
+  const truth = (await j.json()) as Truth;
+  truth.image = `${base}.png`;
+  return { file, truth, label: videoSel.options[videoSel.selectedIndex].text };
 }
 
 async function makeSource(file: File): Promise<{ source: FrameSource; note?: string }> {
@@ -129,7 +140,7 @@ function drawTimeline(canvas: HTMLCanvasElement, a: Analysis) {
   }
 }
 
-function renderRun(label: string, a: Analysis, truth: Truth | null, sourceNote: string | undefined, src: FrameSource) {
+function renderRun(label: string, a: Analysis, truth: Truth | null, sourceNote: string | undefined, src: FrameSource): HTMLElement {
   const card = el('section', 'card');
   const title = el('h2', 'run-title');
   title.append(
@@ -170,6 +181,9 @@ function renderRun(label: string, a: Analysis, truth: Truth | null, sourceNote: 
     'matching time': `${t.match} ms${t.gapGrabs ? ` (incl. ${t.gapGrabs} ms reading gap frames)` : ''}`,
     'header / footer': `${a.bands.header} / ${a.bands.footer} px${truth ? ` (true: ${truth.headerHeight} / ${truth.footerHeight})` : ''}`,
     'pauses found': a.pauses.length,
+    'content used': `${a.trim.start.toFixed(2)}–${a.trim.end.toFixed(2)} s of ${a.trim.duration.toFixed(2)} s${
+      truth?.junkLead ? ` (true: ${truth.junkLead.toFixed(2)}–${(truth.durationSec - (truth.junkTail ?? 0)).toFixed(2)})` : ''
+    }`,
     'page height covered': `${endPos + (a.region.bottom - a.region.top)} px`,
   };
   if (endTruth !== null) stageInfo['end position error'] = `${endPos - endTruth} px`;
@@ -239,6 +253,181 @@ function renderRun(label: string, a: Analysis, truth: Truth | null, sourceNote: 
       v: r.byVelocity || undefined,
     })),
   });
+  return card;
+}
+
+/**
+ * Row-by-row comparison of two images, band by band to limit memory.
+ * Compares brightness (luma), not colour: video codecs store colour at half
+ * resolution (4:2:0), which smears saturated edges over a row or two in the
+ * recording itself. That is not a stitching error; a misplaced row is.
+ */
+async function compareImages(made: Blob, truthUrl: string, skipTopRows: number) {
+  const [a, b] = await Promise.all([createImageBitmap(made), fetch(truthUrl).then((r) => r.blob()).then(createImageBitmap)]);
+  const W = Math.min(a.width, b.width);
+  const H = Math.min(a.height, b.height);
+  const BAND = 256;
+  const ca = new OffscreenCanvas(W, BAND).getContext('2d', { willReadFrequently: true })!;
+  const cb = new OffscreenCanvas(W, BAND).getContext('2d', { willReadFrequently: true })!;
+  let badRows = 0;
+  // A stitching error shifts everything below a seam, so it shows as a long
+  // run of differing rows. Codec colour edges are 1–3 rows. Count runs.
+  let run = 0;
+  let errorRuns = 0;
+  let worst = 0;
+  let worstY = -1;
+  let sum = 0;
+  for (let y0 = 0; y0 < H; y0 += BAND) {
+    const n = Math.min(BAND, H - y0);
+    ca.clearRect(0, 0, W, BAND);
+    cb.clearRect(0, 0, W, BAND);
+    ca.drawImage(a, 0, y0, W, n, 0, 0, W, n);
+    cb.drawImage(b, 0, y0, W, n, 0, 0, W, n);
+    const da = ca.getImageData(0, 0, W, n).data;
+    const db = cb.getImageData(0, 0, W, n).data;
+    for (let r = 0; r < n; r++) {
+      if (y0 + r < skipTopRows) continue;
+      let s = 0;
+      let c = 0;
+      for (let x = 0; x < W; x += 2) {
+        const p = (r * W + x) * 4;
+        const la = da[p] * 0.299 + da[p + 1] * 0.587 + da[p + 2] * 0.114;
+        const lb = db[p] * 0.299 + db[p + 1] * 0.587 + db[p + 2] * 0.114;
+        s += Math.abs(la - lb);
+        c++;
+      }
+      const d = s / c;
+      sum += d;
+      if (d > 8) {
+        badRows++;
+        run++;
+        if (run === 4) errorRuns++;
+      } else run = 0;
+      if (d > worst) {
+        worst = d;
+        worstY = y0 + r;
+      }
+    }
+  }
+  const result = {
+    sizeMatch: a.width === b.width && a.height === b.height,
+    errorRuns,
+    made: `${a.width}×${a.height}`,
+    expected: `${b.width}×${b.height}`,
+    badRows,
+    meanDiff: sum / Math.max(1, H - skipTopRows),
+    worst,
+    worstY,
+  };
+  a.close();
+  b.close();
+  return result;
+}
+
+async function buildImage(card: HTMLElement, a: Analysis, src: FrameSource, truth: Truth | null, label: string) {
+  const section = el('div', 'image-section');
+  section.append(el('h3', undefined, 'Long screenshot'));
+  card.append(section);
+  const t0 = performance.now();
+  const plan = planFrom(a);
+  const format = formatSel.value as Format;
+  const res = await render(plan, src, {
+    format,
+    quality: 0.9,
+    hidePill: !keepStatus.checked,
+    onProgress: (f) => (statusEl.textContent = `Building image ${Math.round(f * 100)}%`),
+  });
+  const ms = performance.now() - t0;
+  const bytes = res.blobs.reduce((s, b) => s + b.size, 0);
+  const info: Record<string, string | number> = {
+    size: `${res.width}×${res.height} px${res.blobs.length > 1 ? ` in ${res.blobs.length} parts` : ''}`,
+    file: `${(bytes / 1048576).toFixed(2)} MB ${format.toUpperCase()}`,
+    'build time': `${Math.round(ms)} ms (strips ${res.timings.strips}, encode ${res.timings.encode})`,
+    'total time': `${((a.timings.total + ms) / 1000).toFixed(2)} s for a ${a.duration.toFixed(1)} s video`,
+    seams: `${plan.seams.length}${plan.seams.some((s) => s.confidence < 0.35) ? ` (${plan.seams.filter((s) => s.confidence < 0.35).length} uncertain)` : ''}`,
+    gaps: plan.gaps.length ? plan.gaps.map((g) => `${g.missing} px missing at ${g.y}`).join(', ') : 'none',
+    'recording indicator': res.pill ? `hidden (${res.pill.w}×${res.pill.h} at ${res.pill.x},${res.pill.y})` : keepStatus.checked ? 'kept' : 'none found',
+  };
+  let verdict: HTMLElement | null = null;
+  let comparison: Awaited<ReturnType<typeof compareImages>> | null = null;
+  if (truth && format === 'png') {
+    statusEl.textContent = 'Comparing with the perfect result…';
+    // With the indicator hidden, the clock goes too: skip the status bar.
+    const skip = truth.pill?.length ? Math.round(a.height * 0.08) : 0;
+    comparison = await compareImages(res.blobs[0], truth.image, skip);
+    const good = comparison.sizeMatch && comparison.errorRuns === 0;
+    verdict = el(
+      'span',
+      `verdict ${good ? 'good' : 'bad'}`,
+      good ? 'Matches the perfect result' : comparison.sizeMatch ? `${comparison.errorRuns} misplaced stretch(es)` : 'Wrong height',
+    );
+    info['vs perfect result'] =
+      `${comparison.made} vs ${comparison.expected}, mean diff ${comparison.meanDiff.toFixed(2)}, ` +
+      `${comparison.badRows} codec colour-edge rows, worst ${comparison.worst.toFixed(1)} at row ${comparison.worstY}`;
+  }
+  if (verdict) section.append(verdict);
+  section.append(kv(info));
+
+  // Preview with seams (green: confident, orange: uncertain, red: gap).
+  const preview = el('div', 'preview');
+  const inner = el('div', 'preview-inner');
+  const urls = res.blobs.map((b) => URL.createObjectURL(b));
+  for (const u of urls) {
+    const img = el('img');
+    img.src = u;
+    img.alt = 'Stitched screenshot';
+    inner.append(img);
+  }
+  const line = (y: number, cls: string, text: string) => {
+    const d = el('div', `seam-line ${cls}`);
+    d.style.top = `${(y / res.height) * 100}%`;
+    d.append(el('span', undefined, text));
+    inner.append(d);
+  };
+  for (const s of plan.seams) line(s.y, s.confidence < 0.35 ? 'low' : '', s.confidence.toFixed(2));
+  for (const g of plan.gaps) line(g.y, 'gap', `gap ${g.missing}px`);
+  preview.append(inner);
+  section.append(preview);
+
+  const actions = el('div', 'image-actions');
+  const ext = format === 'png' ? 'png' : 'jpg';
+  const files = res.blobs.map(
+    (b, i) => new File([b], `scroll-stitch-${label.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}${res.blobs.length > 1 ? `-${i + 1}` : ''}.${ext}`, { type: b.type }),
+  );
+  if (navigator.canShare?.({ files })) {
+    const share = el('button', 'btn', 'Save to Photos');
+    share.addEventListener('click', async () => {
+      try {
+        await navigator.share({ files });
+      } catch (e) {
+        if ((e as Error).name !== 'AbortError') statusEl.textContent = `Share failed: ${(e as Error).message}`;
+      }
+    });
+    actions.append(share);
+  }
+  files.forEach((f, i) => {
+    const link = el('a', 'btn secondary', files.length > 1 ? `Download part ${i + 1}` : 'Download');
+    link.href = urls[i];
+    link.download = f.name;
+    actions.append(link);
+  });
+  section.append(actions);
+
+  const run = report.runs[report.runs.length - 1] as Record<string, unknown>;
+  run.image = {
+    width: res.width,
+    height: res.height,
+    parts: res.parts,
+    bytes,
+    format,
+    buildMs: Math.round(ms),
+    timings: res.timings,
+    seams: plan.seams.map((s) => ({ y: s.y, conf: +s.confidence.toFixed(2) })),
+    gaps: plan.gaps,
+    dropped: plan.dropped,
+    pill: res.pill,
+    comparison,
+  };
 }
 
 runBtn.addEventListener('click', async () => {
@@ -254,7 +443,8 @@ runBtn.addEventListener('click', async () => {
         const a = await analyse(source, { mode }, (stage, f) => {
           statusEl.textContent = `${mode === 'naive' ? 'Naive' : 'Pause-aware'}: ${stage} ${Math.round(f * 100)}%`;
         });
-        renderRun(label, a, truth, note, source);
+        const card = renderRun(label, a, truth, note, source);
+        if (mode === 'pause-aware') await buildImage(card, a, source, truth, label);
       } finally {
         source.dispose();
       }

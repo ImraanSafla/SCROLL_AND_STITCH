@@ -2,7 +2,7 @@
 import { rgbaToGray, type GrayFrame } from '../engine/gray';
 import { Thumbnailer, type Thumb } from '../lib/thumb';
 import { loadVideo, seekTo } from './element';
-import { newStats, type FrameSource } from './source';
+import { newStats, type FrameSource, type StripRequest } from './source';
 
 export class SeekSource implements FrameSource {
   readonly kind = 'seek' as const;
@@ -57,6 +57,26 @@ export class SeekSource implements FrameSource {
       this.stats.grabs++;
     }
     this.stats.grabMs += performance.now() - t0;
+    return out;
+  }
+
+  async grabStrips(requests: StripRequest[]): Promise<ImageBitmap[]> {
+    if (!this.canvas) {
+      this.canvas = new OffscreenCanvas(this.width, this.height);
+      this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+    }
+    const out: ImageBitmap[] = new Array(requests.length);
+    const times = [...new Set(requests.map((r) => r.time))].sort((a, b) => a - b);
+    const end = Math.max(0, this.duration - 1 / 60);
+    for (const t of times) {
+      await seekTo(this.video, Math.min(Math.max(0, t), end));
+      this.ctx!.drawImage(this.video, 0, 0, this.width, this.height);
+      for (let i = 0; i < requests.length; i++) {
+        const r = requests[i];
+        if (r.time !== t || r.rows <= 0) continue;
+        out[i] = await createImageBitmap(this.canvas, 0, r.y, this.width, r.rows);
+      }
+    }
     return out;
   }
 

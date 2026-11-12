@@ -4,15 +4,15 @@ Turns an iPhone screen recording of someone scrolling into one long screenshot, 
 
 **Live:** https://imraansafla.github.io/SCROLL_AND_STITCH/
 
-> Work in progress. The full spec is in [SCROLL_AND_STITCH_BRIEF.md](SCROLL_AND_STITCH_BRIEF.md), with Phase 2 in [SCROLL_AND_STITCH_PHASE_2.md](SCROLL_AND_STITCH_PHASE_2.md).
+> Work in progress. The full spec is in [SCROLL_AND_STITCH_BRIEF.md](SCROLL_AND_STITCH_BRIEF.md), with Phase 2 in [SCROLL_AND_STITCH_PHASE_2.md](SCROLL_AND_STITCH_PHASE_2.md) and Phase 3 in [SCROLL_AND_STITCH_PHASE_3.md](SCROLL_AND_STITCH_PHASE_3.md). Build order: Phase 1, then 2, then 3.
 
 ## Status
 
 | Milestone | State |
 | --- | --- |
 | 1. Frame extraction lab (`/lab.html`) | Done, measured on iPhone |
-| 2. Offset estimation + test harness (`/harness.html`) | Done, awaiting iPhone results |
-| 3. Compositing and output | |
+| 2. Offset estimation + test harness | Done |
+| 3. Compositing and output (`/harness.html`) | Done, awaiting iPhone results |
 | 4. Interface | |
 | 5. Animations | |
 | 6. PWA, offline, README | |
@@ -34,9 +34,10 @@ npm test           # unit tests
 
 ```bash
 swift scripts/make-sample-video.swift public/samples/scroll-demo.mp4 hevc 7 pauses
+swift scripts/make-sample-video.swift public/samples/scroll-junk.mp4 hevc 31 pauses junk
 ```
 
-Styles: `pauses` (scroll, pause, repeat), `continuous`, `fast`.
+Styles: `pauses` (scroll, pause, repeat), `continuous`, `fast`. Adding `junk` puts a Control Centre swipe at the start, a stop-recording prompt at the end and the red recording indicator in the status bar. Each video also gets a `.png` of the perfect stitched result, which the harness compares against (by brightness, since video codecs blur colour edges by a row or two).
 
 ## Deploy to GitHub Pages
 
@@ -58,5 +59,7 @@ Frames come from WebCodecs (mp4box.js demuxer + hardware decoder) where availabl
 ## Known limitations
 
 - Videos with a rotation flag use the slower seeking path for now.
-- Junk at the start and end of a recording (Control Centre, banners) is not trimmed yet (Milestone 3).
+- Junk detection watches the status bar. A recording that starts or ends in a different app with an identical-looking status bar won't be trimmed automatically; the app will let you nudge the range (Milestone 4).
+- Hiding the red recording indicator also removes the clock it surrounds.
+- JPEG output taller than 16,384 px is split into parts; PNG never is.
 - Safari's toolbar shrinking mid-recording is not handled yet: header and footer are detected once per video.

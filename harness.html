@@ -10,11 +10,11 @@
   <body>
     <main class="lab">
       <header class="lab-head">
-        <p class="eyebrow">Milestone 2 · Test harness</p>
-        <h1>Finding the scroll</h1>
+        <p class="eyebrow">Milestone 3 · Test harness</p>
+        <h1>Stitching</h1>
         <p class="sub">
-          Runs the stitching analysis and shows how far the page moved between frames. Test videos
-          are checked against the true answer. Your video never leaves this phone.
+          Finds how far the page moved between frames, then builds the long screenshot. Test videos
+          are checked against the perfect result. Your video never leaves this phone.
         </p>
       </header>
 
@@ -26,6 +26,7 @@
             <option value="scroll-demo">Test: scroll and pause</option>
             <option value="scroll-continuous">Test: continuous scroll, no pauses</option>
             <option value="scroll-fast">Test: fast flicks, short pauses</option>
+            <option value="scroll-junk">Test: Control Centre, stop prompt and red indicator</option>
             <option value="own">Your own recording…</option>
           </select>
         </div>
@@ -50,6 +51,14 @@
             <option value="naive">Naive, 8 frames per second</option>
           </select>
         </div>
+        <div class="field">
+          <label for="formatSel">Image</label>
+          <select id="formatSel">
+            <option value="png">PNG, full quality</option>
+            <option value="jpeg">JPEG, 90% quality</option>
+          </select>
+        </div>
+        <label class="check"><input type="checkbox" id="keepStatus" /> Keep status bar as recorded (don't hide the red indicator)</label>
         <video id="video" muted playsinline hidden></video>
         <button class="btn" id="run" type="button">Run</button>
         <p class="hint" id="status" role="status"></p>

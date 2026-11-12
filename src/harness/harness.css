@@ -105,3 +105,72 @@ td.err-ok {
 td.conf-low {
   color: var(--warn);
 }
+
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+  color: var(--text-2);
+  margin: 0 0 16px;
+}
+.check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+.image-section {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.image-section h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+.preview {
+  margin-top: 14px;
+  max-height: 70vh;
+  overflow-y: auto;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  -webkit-overflow-scrolling: touch;
+}
+.preview-inner {
+  position: relative;
+}
+.preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.seam-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 2px dashed var(--ok);
+  pointer-events: none;
+}
+.seam-line.low {
+  border-top-color: var(--warn);
+}
+.seam-line.gap {
+  border-top: 3px solid var(--bad);
+}
+.seam-line span {
+  position: absolute;
+  right: 4px;
+  top: -18px;
+  font: 600 11px var(--mono);
+  background: var(--surface);
+  color: var(--text);
+  padding: 1px 5px;
+  border-radius: 6px;
+}
+.image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}

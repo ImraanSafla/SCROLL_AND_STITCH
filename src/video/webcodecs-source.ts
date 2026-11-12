@@ -8,7 +8,7 @@
  */
 import { rgbaToGray, type GrayFrame, type GrayImage } from '../engine/gray';
 import { Thumbnailer, type Thumb } from '../lib/thumb';
-import { newStats, type FrameSource } from './source';
+import { newStats, type FrameSource, type StripRequest } from './source';
 import { demux, type ContainerInfo, type EncodedSample } from './webcodecs';
 
 interface PresEntry {
@@ -196,10 +196,14 @@ export class WebCodecsSource implements FrameSource {
     return rgbaToGray(this.ctx!.getImageData(0, 0, w, h).data, w, h);
   }
 
-  async grab(times: number[]): Promise<GrayFrame[]> {
-    const t0 = performance.now();
+  /**
+   * Decode the frames nearest to `times` (each once) and hand each to
+   * `process` with the indices of the requests it satisfies. Processing is
+   * serialised, so `process` may reuse one canvas.
+   */
+  private async forTargets(times: number[], process: (frame: VideoFrame, time: number, indices: number[]) => Promise<void>) {
     const targets = times.map((t) => this.nearest(t));
-    const wanted = new Map<number, number[]>(); // µs → result slots
+    const wanted = new Map<number, number[]>(); // µs → request indices
     targets.forEach((p, i) => {
       const list = wanted.get(p.us) ?? [];
       list.push(i);
@@ -218,33 +222,58 @@ export class WebCodecsSource implements FrameSource {
       if (last && g <= last[1] + 1) last[1] = Math.max(last[1], k);
       else ranges.push([g, k]);
     }
-    const results: GrayFrame[] = new Array(times.length);
     const firstUs = this.pres[0]?.us ?? 0;
+    let chain: Promise<void> = Promise.resolve();
     await this.decodeRanges(ranges, (frame) => {
-      const slots = wanted.get(frame.timestamp);
-      if (!slots) {
+      const indices = wanted.get(frame.timestamp);
+      if (!indices) {
         this.stats.decodedExtra++;
         frame.close();
         return;
       }
       wanted.delete(frame.timestamp);
       const time = (frame.timestamp - firstUs) / 1e6;
-      return this.toGray(frame).then(
-        (g) => {
-          frame.close();
-          for (const i of slots) results[i] = { ...g, time };
-          this.stats.grabs++;
-        },
-        (e) => {
-          frame.close();
-          throw e;
-        },
-      );
+      chain = chain.then(() => process(frame, time, indices)).finally(() => frame.close());
+      return chain;
     });
-    const missing = results.findIndex((r) => !r);
-    if (missing >= 0) throw new Error(`Decoder did not return the frame at ${times[missing].toFixed(3)} s`);
+    await chain;
+    if (wanted.size) {
+      const missing = [...wanted.values()][0][0];
+      throw new Error(`Decoder did not return the frame at ${times[missing].toFixed(3)} s`);
+    }
+  }
+
+  async grab(times: number[]): Promise<GrayFrame[]> {
+    const t0 = performance.now();
+    const results: GrayFrame[] = new Array(times.length);
+    await this.forTargets(times, async (frame, time, indices) => {
+      const g = await this.toGray(frame);
+      for (const i of indices) results[i] = { ...g, time };
+      this.stats.grabs++;
+    });
     this.stats.grabMs += performance.now() - t0;
     return results;
+  }
+
+  async grabStrips(requests: StripRequest[]): Promise<ImageBitmap[]> {
+    const out: ImageBitmap[] = new Array(requests.length);
+    const w = this.width;
+    const h = this.height;
+    if (!this.canvas || this.canvas.width !== w || this.canvas.height !== h) {
+      this.canvas = new OffscreenCanvas(w, h);
+      this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+    }
+    await this.forTargets(
+      requests.map((r) => r.time),
+      async (frame, _time, indices) => {
+        this.ctx!.drawImage(frame, 0, 0, w, h);
+        for (const i of indices) {
+          const r = requests[i];
+          if (r.rows > 0) out[i] = await createImageBitmap(this.canvas!, 0, r.y, w, r.rows);
+        }
+      },
+    );
+    return out;
   }
 
   dispose() {

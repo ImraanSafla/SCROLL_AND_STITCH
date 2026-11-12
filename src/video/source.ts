@@ -18,6 +18,14 @@ export interface SourceStats {
   decodedExtra: number;
 }
 
+/** A horizontal slice of one frame, for compositing. */
+export interface StripRequest {
+  time: number;
+  /** First row within the frame. */
+  y: number;
+  rows: number;
+}
+
 export interface FrameSource {
   readonly kind: 'seek' | 'webcodecs';
   readonly width: number;
@@ -31,6 +39,12 @@ export interface FrameSource {
    * the same order. `frame.time` is the frame's true timestamp.
    */
   grab(times: number[]): Promise<GrayFrame[]>;
+  /**
+   * Full-colour strips cut from frames, returned in request order. Each
+   * frame is decoded once, however many strips it supplies. Times must be
+   * real frame times (as returned by grab), so the same frames are used.
+   */
+  grabStrips(requests: StripRequest[]): Promise<ImageBitmap[]>;
   dispose(): void;
 }
 

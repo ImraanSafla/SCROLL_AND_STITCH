@@ -4,7 +4,8 @@
  * each frame into the output.
  *
  * Pause-aware mode (default):
- *   1. Skim: tiny thumbnails at ~8 fps → motion timeline.
+ *   1. Skim: tiny thumbnails at ~8 fps → motion timeline. Junk at the start
+ *      and end (Control Centre, prompts) is trimmed off here.
  *   2. Static bands (header/footer) from the thumbnails, coarse.
  *   3. Pauses → anchor frames (sharp, blur-free), grabbed at full res.
  *   4. Static bands refined on the anchors.
@@ -21,6 +22,9 @@ import { prepareFrame, matchFrames, refineOffset, type OffsetCandidate, type Pre
 import { findPauses, motionMidpoint, autoThreshold, type MotionSample, type Pause } from '../engine/pauses';
 import { rowSignatures } from '../engine/signatures';
 import { coarseBands, refineBands, type StaticBands } from '../engine/static';
+import { buildPlan, type Plan } from '../engine/compose';
+import { findStableRange } from '../engine/junk';
+import type { RowSignatures } from '../engine/signatures';
 import { thumbDiff, type Thumb } from '../lib/thumb';
 import type { FrameSource } from '../video/source';
 
@@ -35,6 +39,8 @@ export interface AnalyseOptions {
   minConfidence?: number;
   /** How many times a gap may be split in half. */
   maxDepth?: number;
+  /** Use only this time range (seconds), overriding automatic junk trimming. */
+  trim?: { start: number; end: number };
 }
 
 export type PairKind = 'anchor' | 'gap' | 'naive';
@@ -56,6 +62,10 @@ export interface PlacedFrame {
   position: number;
   sharpness: number;
   kind: 'anchor' | 'gap' | 'naive';
+  /** Confidence of the join that placed this frame (1 for the first). */
+  confidence: number;
+  /** Full-res row signatures, used to choose seams. */
+  sig: RowSignatures;
 }
 
 export interface Analysis {
@@ -68,6 +78,8 @@ export interface Analysis {
   coarseBands: StaticBands;
   region: Region;
   skim: { count: number; times: number[]; timeline: MotionSample[]; threshold: number };
+  /** Content range used, and what junk detection suggested. */
+  trim: { start: number; end: number; detectedStart: number; detectedEnd: number; duration: number };
   pauses: Pause[];
   frames: PlacedFrame[];
   pairs: PairResult[];
@@ -78,7 +90,7 @@ export interface Analysis {
 
 export type StageCallback = (stage: 'reading' | 'analysing' | 'matching', fraction: number) => void;
 
-const DEFAULTS: Required<AnalyseOptions> = {
+const DEFAULTS: Required<Omit<AnalyseOptions, 'trim'>> = {
   mode: 'pause-aware',
   skimFps: 8,
   naiveFps: 8,
@@ -101,8 +113,27 @@ export async function analyse(source: FrameSource, options: AnalyseOptions = {},
   // 1. Skim.
   onStage?.('reading', 0);
   let t = performance.now();
-  const thumbs = await source.skim(opts.skimFps, (f) => onStage?.('reading', f));
+  const allThumbs = await source.skim(opts.skimFps, (f) => onStage?.('reading', f));
   lap('skim', t);
+  if (allThumbs.length < 2) throw new Error('This video is too short to stitch.');
+
+  // Drop junk at the start and end.
+  t = performance.now();
+  const stable = findStableRange(allThumbs);
+  const range = opts.trim ?? { start: stable.startTime, end: stable.endTime };
+  let thumbs = allThumbs.filter((x) => x.time >= range.start - 1e-6 && x.time <= range.end + 1e-6);
+  if (thumbs.length < 2) thumbs = allThumbs;
+  const trimInfo = {
+    start: thumbs[0].time,
+    end: thumbs[thumbs.length - 1].time,
+    detectedStart: stable.startTime,
+    detectedEnd: stable.endTime,
+    duration: source.duration,
+  };
+  if (stable.start > 0 || stable.end < allThumbs.length - 1) {
+    warnings.push(`Ignored ${trimInfo.start.toFixed(2)} s at the start and ${(allThumbs[allThumbs.length - 1].time - trimInfo.end).toFixed(2)} s at the end.`);
+  }
+  lap('trim', t);
   const times = thumbs.map((x) => x.time);
   const timeline = timelineOf(thumbs);
   const threshold = autoThreshold(timeline);
@@ -133,7 +164,7 @@ export async function analyse(source: FrameSource, options: AnalyseOptions = {},
     onStage?.('analysing', 0);
     t = performance.now();
     const ts: number[] = [];
-    for (let x = 0; x < source.duration - 1 / 60; x += 1 / opts.naiveFps) ts.push(x);
+    for (let x = trimInfo.start; x <= trimInfo.end + 1e-6; x += 1 / opts.naiveFps) ts.push(x);
     chain = await prep(ts);
     lap('grab', t);
     t = performance.now();
@@ -219,12 +250,15 @@ export async function analyse(source: FrameSource, options: AnalyseOptions = {},
   let pos = 0;
   const pairByTo = new Map(pairs.map((p) => [p.to, p]));
   chain.forEach((f, i) => {
-    if (i > 0) pos += pairByTo.get(f.time)?.offset ?? 0;
+    const pair = i > 0 ? pairByTo.get(f.time) : undefined;
+    if (pair) pos += pair.offset;
     frames.push({
       time: f.time,
       position: pos,
       sharpness: f.sharpness,
       kind: opts.mode === 'naive' ? 'naive' : anchorSet.has(f) ? 'anchor' : 'gap',
+      confidence: pair ? pair.confidence : 1,
+      sig: f.fine,
     });
   });
   const weak = pairs.filter((p) => p.confidence < opts.minConfidence).length;
@@ -240,7 +274,8 @@ export async function analyse(source: FrameSource, options: AnalyseOptions = {},
     bands,
     coarseBands: coarse,
     region: region(bands),
-    skim: { count: thumbs.length, times, timeline, threshold },
+    skim: { count: allThumbs.length, times, timeline, threshold },
+    trim: trimInfo,
     pauses,
     frames,
     pairs,
@@ -281,4 +316,22 @@ function pairOf(
   if (pick.offset === best.offset) return base;
   const refined = refineOffset(a, b, region, pick.offset, a.factor + 1);
   return { ...base, offset: refined.offset, byVelocity: true };
+}
+
+/** Turn an analysis into a compositing plan. */
+export function planFrom(a: Analysis): Plan {
+  return buildPlan(
+    a.frames.map((f) => ({
+      time: f.time,
+      position: f.position,
+      sharpness: f.sharpness,
+      confidence: f.confidence,
+      // In naive mode every frame is a clean sample; treat them as anchors.
+      anchor: f.kind !== 'gap',
+      sig: f.sig,
+    })),
+    a.bands,
+    a.width,
+    a.height,
+  );
 }
