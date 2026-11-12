@@ -22,6 +22,11 @@ export interface EncodedSample {
 
 export interface ContainerInfo {
   brands: string[];
+  fragmented: boolean;
+  /** Video, audio and other tracks in the file. */
+  tracks: string;
+  /** Sample count declared by the container (0 for fragmented files). */
+  declaredSamples: number;
   codec: string;
   codedWidth: number;
   codedHeight: number;
@@ -73,6 +78,9 @@ function summarise(file: ISOFile, info: Movie, track: Track, samples: EncodedSam
   const spread = sorted.length ? sorted[Math.floor(sorted.length * 0.9)] / Math.max(0.001, sorted[Math.floor(sorted.length * 0.1)]) : 1;
   return {
     brands: info.brands,
+    fragmented: info.isFragmented,
+    tracks: info.tracks.map((t) => `${t.type ?? '?'}:${t.codec}`).join(', '),
+    declaredSamples: track.nb_samples,
     codec: track.codec,
     codedWidth: track.video?.width ?? track.track_width,
     codedHeight: track.video?.height ?? track.track_height,

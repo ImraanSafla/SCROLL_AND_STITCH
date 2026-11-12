@@ -60,8 +60,11 @@ export async function render(plan: Plan, source: FrameSource, options: RenderOpt
   const placed: Placed[] = segs.map((seg, i) => ({ seg, bmp: bitmaps[i] }));
   const tStrips = performance.now();
 
-  // The recording indicator lives in the status bar, inside the header.
-  const statusRows = Math.min(plan.header.rows, Math.round(plan.frameHeight * 0.08));
+  // The recording indicator lives in the status bar: the top ~6.5% of a frame
+  // (54 pt on a 852 pt tall iPhone screen).
+  // Not limited to the detected header: on recent iOS, Safari's bars are
+  // see-through, so there may be no fixed header at all.
+  const statusRows = Math.min(plan.height, Math.round(plan.frameHeight * 0.065));
   let pill: Rect | null = null;
 
   const drawRows = (ctx: OffscreenCanvasRenderingContext2D, y0: number, rows: number) => {

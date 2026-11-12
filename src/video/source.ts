@@ -45,6 +45,8 @@ export interface FrameSource {
    * real frame times (as returned by grab), so the same frames are used.
    */
   grabStrips(requests: StripRequest[]): Promise<ImageBitmap[]>;
+  /** Facts about the file and the last read, for error reports. */
+  diagnostics(): Record<string, unknown>;
   dispose(): void;
 }
 

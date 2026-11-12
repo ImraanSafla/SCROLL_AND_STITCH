@@ -32,6 +32,7 @@ export class WebCodecsSource implements FrameSource {
   private gopStart: Int32Array;
   private canvas: OffscreenCanvas | null = null;
   private ctx: OffscreenCanvasRenderingContext2D | null = null;
+  private lastSkim = { framesOut: 0, firstTs: NaN, lastTs: NaN, formats: new Set<string>() };
 
   private constructor(
     readonly info: ContainerInfo,
@@ -71,6 +72,9 @@ export class WebCodecsSource implements FrameSource {
       description: info.description,
     });
     if (!support.supported) throw new Error(`This browser cannot decode ${info.codec}`);
+    if (samples.length < 2) {
+      throw new Error(`Only ${samples.length} frame(s) could be read from the file (container declares ${info.declaredSamples})`);
+    }
     return new WebCodecsSource(info, samples);
   }
 
@@ -137,9 +141,14 @@ export class WebCodecsSource implements FrameSource {
     let next = 0;
     const total = this.samples.length;
     let seen = 0;
+    this.lastSkim = { framesOut: 0, firstTs: NaN, lastTs: NaN, formats: new Set() };
     await this.decodeRanges([[0, total - 1]], (frame) => {
       const t = (frame.timestamp - firstUs) / 1e6;
       seen++;
+      this.lastSkim.framesOut++;
+      if (Number.isNaN(this.lastSkim.firstTs)) this.lastSkim.firstTs = t;
+      this.lastSkim.lastTs = t;
+      this.lastSkim.formats.add(String(frame.format));
       if (t >= next - 0.5 / 60) {
         out.push(thumb.grab(frame, t));
         next += step;
@@ -274,6 +283,24 @@ export class WebCodecsSource implements FrameSource {
       },
     );
     return out;
+  }
+
+  diagnostics() {
+    const { description: _d, ...info } = this.info;
+    return {
+      reader: 'webcodecs',
+      ...info,
+      samplesRead: this.samples.length,
+      firstSampleSync: this.samples[0]?.isSync,
+      firstCts: this.pres[0]?.us,
+      lastCts: this.pres[this.pres.length - 1]?.us,
+      skimFramesOut: this.lastSkim.framesOut,
+      skimFirstT: this.lastSkim.firstTs,
+      skimLastT: this.lastSkim.lastTs,
+      frameFormats: [...this.lastSkim.formats].join(','),
+      grayPath: this.grayPath,
+      ...this.stats,
+    };
   }
 
   dispose() {

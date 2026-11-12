@@ -43,7 +43,7 @@ interface Truth {
 }
 
 const report: { harness: string; when: string; userAgent: string; runs: unknown[] } = {
-  harness: 'milestone-2',
+  harness: 'milestone-3b',
   when: new Date().toISOString(),
   userAgent: navigator.userAgent,
   runs: [],
@@ -432,27 +432,52 @@ async function buildImage(card: HTMLElement, a: Analysis, src: FrameSource, trut
 
 runBtn.addEventListener('click', async () => {
   runBtn.disabled = true;
+  let failedDiagnostics: Record<string, unknown> | null = null;
   runBtn.setAttribute('aria-busy', 'true');
   try {
     statusEl.textContent = 'Loading video…';
     const { file, truth, label } = await loadInput();
     const modes: Mode[] = modeSel.value === 'compare' ? ['pause-aware', 'naive'] : [modeSel.value as Mode];
     for (const mode of modes) {
-      const { source, note } = await makeSource(file);
+      let { source, note } = await makeSource(file);
+      const progress = (stage: string, f: number) => {
+        statusEl.textContent = `${mode === 'naive' ? 'Naive' : 'Pause-aware'}: ${stage} ${Math.round(f * 100)}%`;
+      };
       try {
-        const a = await analyse(source, { mode }, (stage, f) => {
-          statusEl.textContent = `${mode === 'naive' ? 'Naive' : 'Pause-aware'}: ${stage} ${Math.round(f * 100)}%`;
-        });
+        let a: Analysis;
+        try {
+          a = await analyse(source, { mode }, progress);
+        } catch (e) {
+          // In automatic mode, a WebCodecs failure falls back to seeking.
+          if (source.kind !== 'webcodecs' || readerSel.value !== 'auto') throw e;
+          failedDiagnostics = source.diagnostics();
+          source.dispose();
+          source = await SeekSource.create(video, file);
+          note = `WebCodecs failed (${(e as Error).message}), so this run used video seeking.`;
+          a = await analyse(source, { mode }, progress);
+        }
         const card = renderRun(label, a, truth, note, source);
+        const run = report.runs[report.runs.length - 1] as Record<string, unknown>;
+        run.diagnostics = source.diagnostics();
+        if (failedDiagnostics) run.webcodecsFailure = failedDiagnostics;
         if (mode === 'pause-aware') await buildImage(card, a, source, truth, label);
+      } catch (e) {
+        (e as Error & { diagnostics?: unknown }).diagnostics = source.diagnostics();
+        throw e;
       } finally {
         source.dispose();
       }
     }
-    statusEl.textContent = 'Done.';
+    statusEl.textContent = failedDiagnostics ? 'Done (used video seeking: see the note, and please send the report).' : 'Done.';
   } catch (e) {
-    statusEl.textContent = `Failed: ${(e as Error).message}`;
-    report.runs.push({ error: (e as Error).message, video: videoSel.value, reader: readerSel.value });
+    statusEl.textContent = `Failed: ${(e as Error).message} Tap Copy report and send it to me.`;
+    report.runs.push({
+      error: (e as Error).message,
+      video: videoSel.value,
+      reader: readerSel.value,
+      diagnostics: (e as Error & { diagnostics?: unknown }).diagnostics,
+      webcodecsFailure: failedDiagnostics,
+    });
   } finally {
     runBtn.disabled = false;
     runBtn.removeAttribute('aria-busy');

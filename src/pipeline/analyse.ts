@@ -115,7 +115,15 @@ export async function analyse(source: FrameSource, options: AnalyseOptions = {},
   let t = performance.now();
   const allThumbs = await source.skim(opts.skimFps, (f) => onStage?.('reading', f));
   lap('skim', t);
-  if (allThumbs.length < 2) throw new Error('This video is too short to stitch.');
+  if (allThumbs.length < 2) {
+    const err = new Error(
+      allThumbs.length === 0
+        ? `No frames came back from the ${source.kind === 'webcodecs' ? 'WebCodecs' : 'video'} reader.`
+        : `Only one frame came back from the ${source.kind === 'webcodecs' ? 'WebCodecs' : 'video'} reader.`,
+    );
+    (err as Error & { readerFailed?: boolean }).readerFailed = true;
+    throw err;
+  }
 
   // Drop junk at the start and end.
   t = performance.now();

@@ -80,6 +80,10 @@ export class SeekSource implements FrameSource {
     return out;
   }
 
+  diagnostics() {
+    return { reader: 'seek', duration: this.duration, size: `${this.width}x${this.height}`, ...this.stats };
+  }
+
   dispose() {
     if (this.canvas) this.canvas.width = this.canvas.height = 0;
     this.canvas = null;
