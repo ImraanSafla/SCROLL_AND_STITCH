@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+    <title>Scroll &amp; Stitch Lab</title>
+  </head>
+  <body>
+    <main class="lab">
+      <header class="lab-head">
+        <p class="eyebrow">Milestone 1 · Lab</p>
+        <h1>Reading frames</h1>
+        <p class="sub">
+          Measures how fast this device can read frames from a screen recording, three different ways.
+          Your video never leaves this phone.
+        </p>
+      </header>
+
+      <section class="card" aria-labelledby="h-video">
+        <h2 id="h-video">1. Pick a recording</h2>
+        <div class="row">
+          <label class="btn" for="file">Choose recording</label>
+          <input id="file" type="file" accept="video/*" hidden />
+          <button class="btn secondary" id="sample" type="button">Use test video</button>
+        </div>
+        <div class="video-wrap" id="videoWrap" hidden>
+          <video id="video" muted playsinline></video>
+          <dl class="kv" id="videoInfo"></dl>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="h-bench">
+        <h2 id="h-bench">2. Frame-reading speed</h2>
+        <p class="hint">Takes about 30 seconds for a 10-second clip. Keep the screen on.</p>
+        <button class="btn" id="runAll" type="button" disabled>Run all tests</button>
+        <div id="benchResults" class="results"></div>
+      </section>
+
+      <section class="card" aria-labelledby="h-limits">
+        <h2 id="h-limits">3. Canvas limits</h2>
+        <p class="hint">Finds the tallest image this browser can draw in one go.</p>
+        <button class="btn secondary" id="runLimits" type="button">Test canvas limits</button>
+        <dl class="kv" id="limits"></dl>
+      </section>
+
+      <section class="card" aria-labelledby="h-png">
+        <h2 id="h-png">4. Very tall PNG</h2>
+        <p class="hint">
+          Builds a striped test image taller than any canvas allows, then lets you save it to Photos
+          to check that Photos accepts it.
+        </p>
+        <div class="row">
+          <select id="pngHeight" aria-label="Test image height">
+            <option value="20000">20,000 px tall</option>
+            <option value="40000" selected>40,000 px tall</option>
+            <option value="80000">80,000 px tall</option>
+          </select>
+          <button class="btn secondary" id="makePng" type="button">Make test PNG</button>
+        </div>
+        <dl class="kv" id="pngInfo"></dl>
+        <div class="row">
+          <button class="btn" id="sharePng" type="button" hidden>Save to Photos</button>
+          <a class="btn secondary" id="downloadPng" hidden>Download</a>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="h-caps">
+        <h2 id="h-caps">5. This device</h2>
+        <dl class="kv" id="caps"></dl>
+      </section>
+
+      <div class="report-bar">
+        <button class="btn" id="copyReport" type="button">Copy report</button>
+        <span id="copyStatus" class="hint" role="status"></span>
+      </div>
+    </main>
+    <script type="module" src="/src/lab/main.ts"></script>
+  </body>
+</html>
