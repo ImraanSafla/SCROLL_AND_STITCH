@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#faf7f3" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e0d0c" media="(prefers-color-scheme: dark)" />
+    <meta name="description" content="Turn a screen recording or a set of screenshots into one long screenshot, entirely on your phone." />
+    <title>Scroll &amp; Stitch</title>
+    <link rel="manifest" href="/SCROLL_AND_STITCH/manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="/SCROLL_AND_STITCH/icons/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/SCROLL_AND_STITCH/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Stitch" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <script type="module" crossorigin src="/SCROLL_AND_STITCH/assets/main-ChpSz_yS.js"></script>
+    <link rel="modulepreload" crossorigin href="/SCROLL_AND_STITCH/assets/element-BuKW98lC.js">
+    <link rel="modulepreload" crossorigin href="/SCROLL_AND_STITCH/assets/seek-source-DBj1FIN_.js">
+    <link rel="stylesheet" crossorigin href="/SCROLL_AND_STITCH/assets/main-CgvTwc1n.css">
+  </head>
+  <body class="app">
+    <div class="drop-overlay" id="dropOverlay" aria-hidden="true">
+      <p>Drop to stitch</p>
+    </div>
+
+    <main class="shell">
+      <header class="masthead">
+        <h1 class="wordmark">Scroll &amp;&nbsp;Stitch</h1>
+        <p class="lede">Turn a screen recording or screenshots into one long screenshot.</p>
+      </header>
+
+      <!-- Single (one stitch) or Multiple (groups, one stitch each) -->
+      <div class="mode" id="modeSwitch" role="radiogroup" aria-label="How many stitches">
+        <button type="button" role="radio" aria-checked="true" data-mode="single">Single</button>
+        <button type="button" role="radio" aria-checked="false" data-mode="multiple">Multiple</button>
+      </div>
+      <p class="mode-note" id="modeNote" role="status" hidden></p>
+
+      <!-- Empty: pick a recording -->
+      <section class="view" id="viewEmpty" aria-label="Choose a recording">
+        <label class="dropzone" id="dropzone" for="fileInput" tabindex="0" role="button" aria-describedby="dropHint dropError">
+          <span class="dz-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="dz-title">Choose a recording or screenshots</span>
+          <span class="dz-hint" id="dropHint"><span class="only-touch">From Photos</span><span class="only-pointer">Or drop files here</span></span>
+        </label>
+        <input id="fileInput" type="file" accept="video/*,image/*,.mov,.mp4,.m4v,.heic,.heif" multiple hidden />
+        <p class="field-error" id="dropError" role="alert" hidden></p>
+
+        <h2 class="eyebrow">For best results</h2>
+        <ol class="tips">
+          <li>Scroll slowly and pause on each screen.</li>
+          <li>Avoid tapping the page while recording.</li>
+          <li>Start and end on the page you’re capturing.</li>
+          <li>With screenshots, overlap each one with the last.</li>
+        </ol>
+      </section>
+
+      <!-- Groups: several videos or sets of screenshots (Phase 2) -->
+      <section class="view" id="viewList" aria-label="Groups" hidden>
+        <div class="list-head">
+          <h2 class="title">Groups</h2>
+          <p class="meta" id="listMeta"></p>
+        </div>
+        <ol class="groups" id="groupList"></ol>
+        <button class="new-group" type="button" id="newGroup" data-drop="new">
+          <span class="plus" aria-hidden="true">+</span>
+          <span class="ng-title">New group</span>
+          <span class="ng-hint"><span class="only-touch">A recording or screenshots</span><span class="only-pointer">or drop files here</span></span>
+        </button>
+        <div class="list-tools">
+          <button class="btn secondary" type="button" id="reviewSeams" hidden>Check seams</button>
+          <button class="btn quiet" type="button" id="clearFinished" hidden>Clear finished</button>
+          <button class="btn quiet" type="button" id="startOver">Start over</button>
+        </div>
+        <div class="queuebar" id="queueBar">
+          <div class="queuebar-row">
+            <button class="btn primary big run" type="button" id="runBtn"><span id="runLabel">Stitch</span></button>
+            <button class="btn secondary cancel" type="button" id="cancelRun" hidden>Cancel</button>
+          </div>
+          <p class="hint" id="runHint" role="status"></p>
+        </div>
+        <div class="toast" id="toast" role="status" hidden></div>
+      </section>
+
+      <!-- Working: progress -->
+      <section class="view" id="viewWork" aria-label="Stitching" hidden>
+        <div class="clip">
+          <img class="clip-thumb" id="clipThumb" alt="" />
+          <div class="clip-meta">
+            <p class="clip-name" id="clipName"></p>
+            <p class="clip-sub" id="clipSub"></p>
+          </div>
+        </div>
+        <div class="progress" aria-live="polite">
+          <div class="stitch" id="stitchViz" aria-hidden="true">
+            <span class="thread"><i></i></span>
+            <span class="strips"><b style="--i: 0"></b><b style="--i: 1"></b><b style="--i: 2"></b><b style="--i: 3"></b><b style="--i: 4"></b><b style="--i: 5"></b><b style="--i: 6"></b><b style="--i: 7"></b></span>
+          </div>
+          <h2 class="stage" id="stageLabel">Reading video</h2>
+          <div class="bar" role="progressbar" aria-labelledby="stageLabel" aria-valuemin="0" aria-valuemax="100" id="bar">
+            <span id="barFill"></span>
+          </div>
+          <p class="eta" id="eta" aria-live="off"></p>
+          <ol class="steps" id="steps">
+            <li data-step="reading">Reading</li>
+            <li data-step="analysing">Analysing</li>
+            <li data-step="stitching">Stitching</li>
+          </ol>
+        </div>
+        <p class="note" id="longNote" hidden>Long recordings take a little longer.</p>
+        <button class="btn secondary big" type="button" id="stopBtn">Stop</button>
+      </section>
+
+      <!-- Error -->
+      <section class="view" id="viewError" aria-label="Something went wrong" hidden>
+        <h2 class="title">Couldn’t stitch this</h2>
+        <p class="error-body" id="errorBody"></p>
+        <div class="stack">
+          <button class="btn primary big" type="button" id="errorRetry">Try again</button>
+          <button class="btn secondary big" type="button" id="errorNew">Choose another file</button>
+          <button class="btn quiet big" type="button" id="errorReport" hidden>Copy report</button>
+        </div>
+      </section>
+
+      <!-- Result -->
+      <section class="view" id="viewResult" aria-label="Your long screenshot" hidden>
+        <div class="result-head">
+          <h2 class="title">Your screenshot</h2>
+          <p class="meta" id="resultSize"></p>
+        </div>
+        <p class="note warn" id="gapNote" hidden></p>
+        <p class="note" id="stillsNote" hidden></p>
+        <p class="note" id="seamNote" hidden></p>
+        <div class="preview" id="preview" tabindex="0" aria-label="Preview. Pinch or double-tap to zoom.">
+          <div class="preview-inner" id="previewInner">
+            <img id="previewImg" alt="Stitched screenshot preview" draggable="false" />
+            <div class="crop-shade top" id="shadeTop"><button class="crop-handle" type="button" id="handleTop" aria-label="Trim from the top. Use arrow keys to adjust."></button></div>
+            <div class="crop-shade bottom" id="shadeBottom"><button class="crop-handle" type="button" id="handleBottom" aria-label="Trim from the bottom. Use arrow keys to adjust."></button></div>
+            <div class="blur-layer" id="blurLayer" aria-hidden="true"></div>
+            <div class="seam-layer" id="seamLayer"></div>
+            <div class="debug-layer" id="debugLayer" hidden></div>
+            <div class="shimmer-layer" id="shimmerLayer" aria-hidden="true"></div>
+          </div>
+          <div class="preview-busy" id="previewBusy" hidden><span>Updating</span></div>
+        </div>
+        <div class="seam-panel" id="seamPanel" role="region" aria-label="Check a join" hidden>
+          <div class="sp-head">
+            <p class="sp-title">Check this join</p>
+            <p class="meta" id="seamCount"></p>
+          </div>
+          <p class="hint left">Move the lower part until the lines meet cleanly.</p>
+          <div class="sp-row two">
+            <button class="btn secondary" type="button" id="seamUp">Up 1 px</button>
+            <button class="btn secondary" type="button" id="seamDown">Down 1 px</button>
+          </div>
+          <div class="sp-row">
+            <button class="icon-btn" type="button" id="seamPrev" aria-label="Previous join">‹</button>
+            <button class="btn primary" type="button" id="seamOk">Looks right</button>
+            <button class="icon-btn" type="button" id="seamNext" aria-label="Next join">›</button>
+          </div>
+        </div>
+        <div class="blur-block">
+          <label class="switch-row">
+            <span>Blur private details</span>
+            <input type="checkbox" role="switch" id="blurToggle" />
+          </label>
+          <div class="blur-tools" id="blurTools" hidden>
+            <p class="hint left" id="blurHint"><span class="only-touch">Tap a line to blur it. Touch and hold, then drag to blur an area.</span><span class="only-pointer">Click a line to blur it, or drag over an area.</span> Blurs are saved into the image.</p>
+            <div class="preview-tools">
+              <button class="btn secondary tool" type="button" id="blurUndo" hidden>
+                <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5L3.5 9.5 8 14" /><path d="M4 9.5h10a5.5 5.5 0 0 1 0 11h-4" /></svg>
+                <span>Undo</span>
+              </button>
+              <button class="btn secondary tool" type="button" id="blurClear" hidden>Clear all</button>
+            </div>
+          </div>
+        </div>
+
+        <details class="adjust" id="adjustBlock">
+          <summary class="adjust-summary">
+            <span>Adjust</span>
+            <span class="adjust-what" id="adjustWhat">Trim and more</span>
+            <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9.5l6 6 6-6" /></svg>
+          </summary>
+          <div class="order-block" id="orderBlock" hidden>
+            <h3 class="eyebrow">Order</h3>
+            <p class="hint left" id="orderHint">Touch and hold a screenshot, then drag to reorder.</p>
+          </div>
+          <div class="stepper-row">
+            <span>Trim top</span>
+            <div class="stepper">
+              <button class="icon-btn" type="button" data-trim="top" data-delta="-10" aria-label="Trim less from the top">−</button>
+              <output id="trimTopOut">0 px</output>
+              <button class="icon-btn" type="button" data-trim="top" data-delta="10" aria-label="Trim more from the top">+</button>
+            </div>
+          </div>
+          <div class="stepper-row">
+            <span>Trim bottom</span>
+            <div class="stepper">
+              <button class="icon-btn" type="button" data-trim="bottom" data-delta="-10" aria-label="Trim less from the bottom">−</button>
+              <output id="trimBottomOut">0 px</output>
+              <button class="icon-btn" type="button" data-trim="bottom" data-delta="10" aria-label="Trim more from the bottom">+</button>
+            </div>
+          </div>
+          <label class="switch-row">
+            <span>Hide status bar</span>
+            <input type="checkbox" role="switch" id="trimStatus" />
+          </label>
+          <label class="switch-row" id="rowHeader" hidden>
+            <span>Keep top bar</span>
+            <input type="checkbox" role="switch" id="keepHeader" checked />
+          </label>
+          <label class="switch-row" id="rowFooter" hidden>
+            <span>Keep bottom bar</span>
+            <input type="checkbox" role="switch" id="keepFooter" checked />
+          </label>
+          <label class="switch-row" id="rowPill" hidden>
+            <span>Hide recording indicator</span>
+            <input type="checkbox" role="switch" id="hidePill" checked />
+          </label>
+          <label class="quality" id="qualityRow" hidden>
+            <span>Quality <output id="qualityOut">90%</output></span>
+            <input type="range" id="quality" min="50" max="100" step="5" value="90" />
+          </label>
+
+          <div class="range-block" id="rangeBlock" hidden>
+            <div class="stepper-row">
+              <span>Recording used</span>
+              <output id="rangeOut"></output>
+            </div>
+            <div class="range" id="range">
+              <div class="range-fill" id="rangeFill"></div>
+              <button class="range-thumb" type="button" id="rangeStart" role="slider" aria-label="Start of the recording to use"></button>
+              <button class="range-thumb" type="button" id="rangeEnd" role="slider" aria-label="End of the recording to use"></button>
+            </div>
+            <button class="btn secondary" type="button" id="restitch" hidden>Stitch again with this range</button>
+          </div>
+        </details>
+
+        <div class="actions">
+          <button class="btn primary big" type="button" id="saveBtn">
+            <svg class="check" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+            <span class="label">Save to Photos</span>
+          </button>
+          <a class="btn secondary big" id="downloadLink" href="#">Download PNG</a>
+          <button class="btn soft big" type="button" id="newBtn">
+            <svg class="btn-icon icon-new" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            <svg class="btn-icon icon-back" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6l-6 6 6 6M4 12h16" /></svg>
+            <span class="label">Make a new stitch</span>
+          </button>
+          <p class="hint" id="saveHint" role="status" hidden></p>
+          <p class="hint thanks" id="thanks" hidden>Support Scroll &amp; Stitch with a <a href="https://ko-fi.com/imraan97" target="_blank" rel="noopener noreferrer" data-coffee>coffee</a>.</p>
+        </div>
+
+        <details class="debug" id="debugPanel" hidden>
+          <summary>Debug</summary>
+          <button class="btn secondary" type="button" id="debugCopy">Copy report</button>
+          <pre id="debugText"></pre>
+          <p><a href="./harness.html">Test harness</a> · <a href="./lab.html">Frame lab</a></p>
+        </details>
+      </section>
+
+      <footer class="footer">
+        <p class="privacy">Everything happens on your device. Nothing is uploaded.</p>
+        <a class="coffee" id="coffee" href="https://ko-fi.com/imraan97" target="_blank" rel="noopener noreferrer" aria-label="Buy me a coffee on Ko-fi (opens in a new tab)">
+          <svg class="cup" viewBox="0 0 24 24" aria-hidden="true"><path class="steam" d="M9 2.5v3M13 2.5v3" /><path d="M4 9h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9Z" /><path d="M17 11h1.5a2.5 2.5 0 0 1 0 5H17" /></svg><span>Buy me a coffee</span>
+        </a>
+        <p class="coffee-offline" id="coffeeOffline" role="status" hidden>Ko-fi needs an internet connection.</p>
+      </footer>
+    </main>
+
+    <video id="hiddenVideo" muted playsinline hidden></video>
+  </body>
+</html>
